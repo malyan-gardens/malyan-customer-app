@@ -1,0 +1,18 @@
+{
+  "expo": {
+    "name": "Malyan Customer",
+    "slug": "malyan-customer",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "scheme": "malyan-customer",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.malyangardens.customer"
+    },
+    "android": {
+      "package": "com.malyangardens.customer"
+    },
+    "plugins": ["expo-router"]
+  }
+}

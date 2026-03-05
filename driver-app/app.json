@@ -1,0 +1,18 @@
+{
+  "expo": {
+    "name": "Malyan Driver",
+    "slug": "malyan-driver",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "scheme": "malyan-driver",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.malyangardens.driver"
+    },
+    "android": {
+      "package": "com.malyangardens.driver"
+    },
+    "plugins": ["expo-router"]
+  }
+}
