@@ -47,7 +47,8 @@ export default function Login() {
           border: '1px solid #2a3d2e',
           borderRadius: '16px',
           padding: '48px',
-          width: '420px',
+          width: '100%',
+          maxWidth: '420px',
           textAlign: 'center',
         }}
       >
@@ -75,14 +76,7 @@ export default function Login() {
 
         <form onSubmit={handleLogin}>
           <div style={{ marginBottom: '16px', textAlign: 'right' }}>
-            <label
-              style={{
-                display: 'block',
-                fontSize: '12px',
-                color: '#7a9480',
-                marginBottom: '6px',
-              }}
-            >
+            <label style={{ display: 'block', fontSize: '12px', color: '#7a9480', marginBottom: '6px' }}>
               البريد الإلكتروني
             </label>
             <input
@@ -98,7 +92,7 @@ export default function Login() {
                 borderRadius: '10px',
                 padding: '12px 16px',
                 color: '#e8f0ea',
-                fontFamily: 'Cairo, Tajawal, sans-serif',
+                fontFamily: 'inherit',
                 fontSize: '14px',
                 outline: 'none',
                 boxSizing: 'border-box',
@@ -107,14 +101,7 @@ export default function Login() {
           </div>
 
           <div style={{ marginBottom: '16px', textAlign: 'right' }}>
-            <label
-              style={{
-                display: 'block',
-                fontSize: '12px',
-                color: '#7a9480',
-                marginBottom: '6px',
-              }}
-            >
+            <label style={{ display: 'block', fontSize: '12px', color: '#7a9480', marginBottom: '6px' }}>
               كلمة المرور
             </label>
             <input
@@ -130,7 +117,7 @@ export default function Login() {
                 borderRadius: '10px',
                 padding: '12px 16px',
                 color: '#e8f0ea',
-                fontFamily: 'Cairo, Tajawal, sans-serif',
+                fontFamily: 'inherit',
                 fontSize: '14px',
                 outline: 'none',
                 boxSizing: 'border-box',
@@ -164,7 +151,7 @@ export default function Login() {
               borderRadius: '10px',
               padding: '14px',
               color: 'white',
-              fontFamily: 'Cairo, Tajawal, sans-serif',
+              fontFamily: 'inherit',
               fontSize: '15px',
               fontWeight: 700,
               cursor: loading ? 'not-allowed' : 'pointer',

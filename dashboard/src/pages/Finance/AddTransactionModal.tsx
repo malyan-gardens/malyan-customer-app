@@ -12,6 +12,26 @@ interface Category {
   icon: string | null;
 }
 
+const inputStyle: React.CSSProperties = {
+  width: '100%',
+  background: '#080e0a',
+  border: '1px solid #2a3d2e',
+  borderRadius: '8px',
+  padding: '10px 14px',
+  color: '#e8f0ea',
+  fontFamily: 'inherit',
+  fontSize: '13px',
+  outline: 'none',
+  boxSizing: 'border-box',
+};
+
+const labelStyle: React.CSSProperties = {
+  display: 'block',
+  fontSize: '12px',
+  color: '#7a9480',
+  marginBottom: '6px',
+};
+
 export default function AddTransactionModal({ onClose, onSaved }: Props) {
   const [type, setType] = useState<'income' | 'expense'>('income');
   const [categories, setCategories] = useState<Category[]>([]);
@@ -58,25 +78,6 @@ export default function AddTransactionModal({ onClose, onSaved }: Props) {
     onSaved();
   }
 
-  const inputStyle: React.CSSProperties = {
-    width: '100%',
-    background: '#080e0a',
-    border: '1px solid #2a3d2e',
-    borderRadius: '8px',
-    padding: '10px 14px',
-    color: '#e8f0ea',
-    fontFamily: 'Cairo, Tajawal, sans-serif',
-    fontSize: '13px',
-    outline: 'none',
-    boxSizing: 'border-box',
-  };
-  const labelStyle: React.CSSProperties = {
-    display: 'block',
-    fontSize: '12px',
-    color: '#7a9480',
-    marginBottom: '6px',
-  };
-
   return (
     <div
       style={{
@@ -113,11 +114,12 @@ export default function AddTransactionModal({ onClose, onSaved }: Props) {
             <button
               key={t}
               onClick={() => setType(t)}
+              type="button"
               style={{
                 flex: 1,
                 padding: '10px',
                 borderRadius: '8px',
-                border: 'none',
+                border: type === t ? (t === 'income' ? '1px solid #1a7a3c' : '1px solid rgba(224,82,82,0.3)') : '1px solid #2a3d2e',
                 cursor: 'pointer',
                 background:
                   type === t
@@ -126,17 +128,9 @@ export default function AddTransactionModal({ onClose, onSaved }: Props) {
                       : 'rgba(224,82,82,0.2)'
                     : '#162019',
                 color: type === t ? (t === 'income' ? '#4cdf80' : '#e05252') : '#7a9480',
-                fontFamily: 'Cairo, Tajawal, sans-serif',
+                fontFamily: 'inherit',
                 fontSize: '14px',
                 fontWeight: 600,
-                borderWidth: '1px',
-                borderStyle: 'solid',
-                borderColor:
-                  type === t
-                    ? t === 'income'
-                      ? '#1a7a3c'
-                      : 'rgba(224,82,82,0.3)'
-                    : '#2a3d2e',
               }}
             >
               {t === 'income' ? '📈 دخل' : '📉 مصروف'}
@@ -219,6 +213,7 @@ export default function AddTransactionModal({ onClose, onSaved }: Props) {
 
         <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
           <button
+            type="button"
             onClick={onClose}
             style={{
               background: 'transparent',
@@ -226,13 +221,14 @@ export default function AddTransactionModal({ onClose, onSaved }: Props) {
               borderRadius: '8px',
               padding: '10px 20px',
               color: '#7a9480',
-              fontFamily: 'Cairo, Tajawal, sans-serif',
+              fontFamily: 'inherit',
               cursor: 'pointer',
             }}
           >
             إلغاء
           </button>
           <button
+            type="button"
             onClick={handleSave}
             disabled={saving}
             style={{
@@ -241,10 +237,10 @@ export default function AddTransactionModal({ onClose, onSaved }: Props) {
               borderRadius: '8px',
               padding: '10px 24px',
               color: 'white',
-              fontFamily: 'Cairo, Tajawal, sans-serif',
+              fontFamily: 'inherit',
               fontSize: '14px',
               fontWeight: 700,
-              cursor: 'pointer',
+              cursor: saving ? 'not-allowed' : 'pointer',
             }}
           >
             {saving ? '⏳ جاري الحفظ...' : '💾 حفظ'}
