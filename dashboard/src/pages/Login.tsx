@@ -1,71 +1,181 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { requireMalyanEmail } from '../lib/auth';
 import { supabase } from '../lib/supabase';
+import { useNavigate } from 'react-router-dom';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
-  const hasSupabase = !!import.meta.env.VITE_SUPABASE_URL;
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setError('');
-    try {
-      requireMalyanEmail(email);
-      if (hasSupabase) {
-        const { error: err } = await supabase.auth.signInWithPassword({ email, password });
-        if (err) throw err;
-      } else {
-        localStorage.setItem('malyan_demo_user', '1');
-      }
-      navigate('/dashboard', { replace: true });
-      window.location.reload();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'فشل تسجيل الدخول');
+
+    if (!email.endsWith('@malyangardens.com')) {
+      setError('يجب أن يكون الإيميل من نطاق @malyangardens.com');
+      return;
     }
+
+    setLoading(true);
+    const { error: err } = await supabase.auth.signInWithPassword({ email, password });
+
+    if (err) {
+      setError('بيانات غير صحيحة، حاول مجدداً');
+    } else {
+      navigate('/dashboard');
+    }
+    setLoading(false);
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-green-deep p-4">
-      <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-xl">
-        <h1 className="mb-2 text-2xl font-extrabold text-green-deep">مليان <span className="text-gold">للحدائق</span></h1>
-        <p className="mb-6 text-gray-500">لوحة التحكم — تسجيل الدخول</p>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">البريد الإلكتروني</label>
+    <div
+      style={{
+        minHeight: '100vh',
+        background: '#080e0a',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontFamily: 'Cairo, Tajawal, sans-serif',
+        direction: 'rtl',
+      }}
+    >
+      <div
+        style={{
+          background: '#0f1a12',
+          border: '1px solid #2a3d2e',
+          borderRadius: '16px',
+          padding: '48px',
+          width: '420px',
+          textAlign: 'center',
+        }}
+      >
+        <div
+          style={{
+            width: '72px',
+            height: '72px',
+            background: 'linear-gradient(135deg, #1a7a3c, #4cdf80)',
+            borderRadius: '20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            margin: '0 auto 20px',
+            fontSize: '32px',
+            boxShadow: '0 8px 24px rgba(26,122,60,0.4)',
+          }}
+        >
+          🌿
+        </div>
+
+        <h1 style={{ fontSize: '22px', fontWeight: 700, marginBottom: '4px', color: '#e8f0ea' }}>
+          مليان للتجارة والحدائق
+        </h1>
+        <p style={{ color: '#7a9480', fontSize: '13px', marginBottom: '32px' }}>لوحة إدارة الشركة</p>
+
+        <form onSubmit={handleLogin}>
+          <div style={{ marginBottom: '16px', textAlign: 'right' }}>
+            <label
+              style={{
+                display: 'block',
+                fontSize: '12px',
+                color: '#7a9480',
+                marginBottom: '6px',
+              }}
+            >
+              البريد الإلكتروني
+            </label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="name@malyangardens.com"
-              className="w-full rounded-xl border border-gray-300 px-4 py-3 text-right focus:border-green-mid focus:outline-none focus:ring-1 focus:ring-green-mid"
+              placeholder="zaher@malyangardens.com"
               required
+              style={{
+                width: '100%',
+                background: '#080e0a',
+                border: '1px solid #2a3d2e',
+                borderRadius: '10px',
+                padding: '12px 16px',
+                color: '#e8f0ea',
+                fontFamily: 'Cairo, Tajawal, sans-serif',
+                fontSize: '14px',
+                outline: 'none',
+                boxSizing: 'border-box',
+              }}
             />
           </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">كلمة المرور</label>
+
+          <div style={{ marginBottom: '16px', textAlign: 'right' }}>
+            <label
+              style={{
+                display: 'block',
+                fontSize: '12px',
+                color: '#7a9480',
+                marginBottom: '6px',
+              }}
+            >
+              كلمة المرور
+            </label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-xl border border-gray-300 px-4 py-3 text-right focus:border-green-mid focus:outline-none focus:ring-1 focus:ring-green-mid"
+              placeholder="••••••••"
               required
+              style={{
+                width: '100%',
+                background: '#080e0a',
+                border: '1px solid #2a3d2e',
+                borderRadius: '10px',
+                padding: '12px 16px',
+                color: '#e8f0ea',
+                fontFamily: 'Cairo, Tajawal, sans-serif',
+                fontSize: '14px',
+                outline: 'none',
+                boxSizing: 'border-box',
+              }}
             />
           </div>
-          {error && <p className="text-sm text-red-600">{error}</p>}
-          {!hasSupabase && (
-            <p className="text-sm text-amber-700">وضع تجريبي: أي إيميل @malyangardens.com يقبل.</p>
+
+          {error && (
+            <div
+              style={{
+                background: 'rgba(224,82,82,0.1)',
+                border: '1px solid rgba(224,82,82,0.3)',
+                borderRadius: '8px',
+                padding: '10px',
+                color: '#e05252',
+                fontSize: '13px',
+                marginBottom: '16px',
+              }}
+            >
+              {error}
+            </div>
           )}
+
           <button
             type="submit"
-            className="w-full rounded-xl bg-gold py-3 font-bold text-green-deep transition hover:bg-amber-600"
+            disabled={loading}
+            style={{
+              width: '100%',
+              background: loading ? '#1a3d24' : 'linear-gradient(135deg, #1a7a3c, #22a84f)',
+              border: 'none',
+              borderRadius: '10px',
+              padding: '14px',
+              color: 'white',
+              fontFamily: 'Cairo, Tajawal, sans-serif',
+              fontSize: '15px',
+              fontWeight: 700,
+              cursor: loading ? 'not-allowed' : 'pointer',
+              boxShadow: '0 4px 16px rgba(26,122,60,0.4)',
+            }}
           >
-            تسجيل الدخول
+            {loading ? '⏳ جاري الدخول...' : 'دخول إلى النظام'}
           </button>
         </form>
+
+        <p style={{ marginTop: '16px', fontSize: '11px', color: '#4a6450' }}>الدخول مخصص لفريق مليان فقط</p>
       </div>
     </div>
   );
