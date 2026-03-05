@@ -11,26 +11,16 @@ export function useAuth() {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       setUser(session?.user ?? null);
       if (session?.user) {
-        const { data } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', session.user.id)
-          .single();
+        const { data } = await supabase.from('profiles').select('role').eq('id', session.user.id).single();
         setRole(data?.role ?? '');
       }
       setLoading(false);
     });
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setUser(session?.user ?? null);
       if (session?.user) {
-        const { data } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', session.user.id)
-          .single();
+        const { data } = await supabase.from('profiles').select('role').eq('id', session.user.id).single();
         setRole(data?.role ?? '');
       }
     });
