@@ -71,26 +71,41 @@ export default function AddProductModal({ onClose, onSaved }: Props) {
 
     setSaving(true);
 
+    // مهلة كلية: إذا لم تنته العملية خلال 15 ثانية نوقف "جاري الحفظ" ونعرض رسالة
+    const timeoutMs = 15000;
+    const timeoutId = setTimeout(() => {
+      setSaving(false);
+      setError('انتهت المهلة. تحقق من الاتصال بالإنترنت وحاول مرة أخرى.');
+    }, timeoutMs);
+
+    function done() {
+      clearTimeout(timeoutId);
+      setSaving(false);
+    }
+
     let imageUrl: string | null = null;
     if (imageFile) {
       try {
         const ext = imageFile.name.split('.').pop() || 'jpg';
         const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-        const { error: uploadErr } = await supabase.storage
+        const uploadPromise = supabase.storage
           .from('inventory-images')
           .upload(path, imageFile, { upsert: false });
+        const timeoutPromise = new Promise<{ error: { message: string } }>((resolve) =>
+          setTimeout(() => resolve({ error: { message: 'timeout' } }), 8000)
+        );
+        const { error: uploadErr } = await Promise.race([uploadPromise, timeoutPromise]);
         if (!uploadErr) {
           const { data: urlData } = supabase.storage.from('inventory-images').getPublicUrl(path);
           imageUrl = urlData.publicUrl;
         }
-        // إذا فشل الرفع: نكمل الحفظ بدون صورة (الصورة اختيارية)
       } catch {
-        // أي خطأ في الرفع: نكمل بدون صورة
+        // نكمل بدون صورة
       }
     }
 
     try {
-      const { error: insertErr } = await supabase.from('inventory').insert({
+      const insertPromise = supabase.from('inventory').insert({
         name_ar: form.name_ar.trim(),
         image_url: imageUrl,
         cost_price: costPrice,
@@ -98,14 +113,21 @@ export default function AddProductModal({ onClose, onSaved }: Props) {
         quantity: quantity,
         category: form.category,
       });
+      const insertTimeout = new Promise<{ error: { message: string } }>((resolve) =>
+        setTimeout(() => resolve({ error: { message: 'انتهت المهلة' } }), 10000)
+      );
+      const result = await Promise.race([insertPromise, insertTimeout]);
 
-      if (insertErr) {
-        setError(insertErr.message || 'فشل الحفظ');
+      if (result?.error) {
+        setError(result.error.message || 'فشل الحفظ');
+        done();
         return;
       }
+      done();
       onSaved();
-    } finally {
-      setSaving(false);
+    } catch {
+      setError('حدث خطأ. تحقق من الاتصال وحاول مرة أخرى.');
+      done();
     }
   }
 
