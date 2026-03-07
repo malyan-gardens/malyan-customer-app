@@ -8,24 +8,54 @@ export function useAuth() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
+    let cancelled = false;
+
+    supabase.auth
+      .getSession()
+      .then(async ({ data: { session } }) => {
+        if (cancelled) return;
+        setUser(session?.user ?? null);
+        try {
+          if (session?.user) {
+            const { data } = await supabase
+              .from('profiles')
+              .select('role')
+              .eq('id', session.user.id)
+              .maybeSingle();
+            if (!cancelled) setRole(data?.role ?? '');
+          }
+        } catch {
+          // تجاهل خطأ profiles (جدول أو RLS)
+        } finally {
+          if (!cancelled) setLoading(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setUser(session?.user ?? null);
       if (session?.user) {
-        const { data } = await supabase.from('profiles').select('role').eq('id', session.user.id).single();
-        setRole(data?.role ?? '');
+        try {
+          const { data } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', session.user.id)
+            .maybeSingle();
+          setRole(data?.role ?? '');
+        } catch {
+          setRole('');
+        }
       }
-      setLoading(false);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        const { data } = await supabase.from('profiles').select('role').eq('id', session.user.id).single();
-        setRole(data?.role ?? '');
-      }
-    });
-
-    return () => subscription.unsubscribe();
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signOut = () => supabase.auth.signOut();
