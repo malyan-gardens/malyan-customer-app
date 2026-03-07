@@ -73,37 +73,40 @@ export default function AddProductModal({ onClose, onSaved }: Props) {
 
     let imageUrl: string | null = null;
     if (imageFile) {
-      const ext = imageFile.name.split('.').pop() || 'jpg';
-      const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-      const { error: uploadErr } = await supabase.storage
-        .from('inventory-images')
-        .upload(path, imageFile, { upsert: false });
-      if (uploadErr) {
-        setError('فشل رفع الصورة. تأكد من وجود bucket باسم inventory-images في Storage.');
-        setSaving(false);
+      try {
+        const ext = imageFile.name.split('.').pop() || 'jpg';
+        const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+        const { error: uploadErr } = await supabase.storage
+          .from('inventory-images')
+          .upload(path, imageFile, { upsert: false });
+        if (!uploadErr) {
+          const { data: urlData } = supabase.storage.from('inventory-images').getPublicUrl(path);
+          imageUrl = urlData.publicUrl;
+        }
+        // إذا فشل الرفع: نكمل الحفظ بدون صورة (الصورة اختيارية)
+      } catch {
+        // أي خطأ في الرفع: نكمل بدون صورة
+      }
+    }
+
+    try {
+      const { error: insertErr } = await supabase.from('inventory').insert({
+        name_ar: form.name_ar.trim(),
+        image_url: imageUrl,
+        cost_price: costPrice,
+        sell_price: sellPrice,
+        quantity: quantity,
+        category: form.category,
+      });
+
+      if (insertErr) {
+        setError(insertErr.message || 'فشل الحفظ');
         return;
       }
-      const { data: urlData } = supabase.storage.from('inventory-images').getPublicUrl(path);
-      imageUrl = urlData.publicUrl;
-    }
-
-    const { error: insertErr } = await supabase.from('inventory').insert({
-      name_ar: form.name_ar.trim(),
-      image_url: imageUrl,
-      cost_price: costPrice,
-      sell_price: sellPrice,
-      quantity: quantity,
-      category: form.category,
-    });
-
-    if (insertErr) {
-      setError(insertErr.message || 'فشل الحفظ');
+      onSaved();
+    } finally {
       setSaving(false);
-      return;
     }
-
-    setSaving(false);
-    onSaved();
   }
 
   return (
