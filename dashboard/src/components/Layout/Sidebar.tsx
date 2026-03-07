@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom';
 
 const links = [
   { to: '/dashboard', label: 'الرئيسية' },
+  { to: '/inventory', label: 'المخزون' },
   { to: '/finance', label: 'المالية' },
 ];
 

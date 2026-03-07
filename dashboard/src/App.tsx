@@ -3,6 +3,7 @@ import { useAuth } from './hooks/useAuth';
 import Login from './pages/Login';
 import Layout from './components/Layout/Layout';
 import Dashboard from './pages/Dashboard';
+import Inventory from './pages/Inventory';
 import Finance from './pages/Finance';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -45,6 +46,7 @@ export default function App() {
         >
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
+          <Route path="inventory" element={<Inventory />} />
           <Route path="finance" element={<Finance />} />
         </Route>
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
