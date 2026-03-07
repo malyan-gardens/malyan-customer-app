@@ -10,6 +10,13 @@ export function useAuth() {
   useEffect(() => {
     let cancelled = false;
 
+    function done() {
+      if (!cancelled) setLoading(false);
+    }
+
+    // مهلة: إذا لم يُستجب خلال 6 ثوانٍ نوقف التحميل (تجنب البقاء على "جاري التحميل" للأبد)
+    const timeoutId = setTimeout(done, 6000);
+
     supabase.auth
       .getSession()
       .then(async ({ data: { session } }) => {
@@ -27,11 +34,13 @@ export function useAuth() {
         } catch {
           // تجاهل خطأ profiles (جدول أو RLS)
         } finally {
-          if (!cancelled) setLoading(false);
+          clearTimeout(timeoutId);
+          done();
         }
       })
       .catch(() => {
-        if (!cancelled) setLoading(false);
+        clearTimeout(timeoutId);
+        done();
       });
 
     const {
@@ -54,6 +63,7 @@ export function useAuth() {
 
     return () => {
       cancelled = true;
+      clearTimeout(timeoutId);
       subscription.unsubscribe();
     };
   }, []);
