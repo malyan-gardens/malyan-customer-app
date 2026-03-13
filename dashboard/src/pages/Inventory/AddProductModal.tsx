@@ -75,7 +75,9 @@ export default function AddProductModal({ onClose, onSaved }: Props) {
     const timeoutMs = 45000;
     const timeoutId = setTimeout(() => {
       setSaving(false);
-      setError('انتهت المهلة. تحقق من الاتصال وحاول مرة أخرى.');
+      setError(
+        'انتهت المهلة.\nتحقق من: الاتصال بالإنترنت · مشروع Supabase غير متوقف · جدول inventory موجود وصلاحيات الإدراج مفعّلة'
+      );
     }, timeoutMs);
 
     function done() {
@@ -165,6 +167,7 @@ export default function AddProductModal({ onClose, onSaved }: Props) {
               color: '#e05252',
               fontSize: 13,
               marginBottom: 16,
+              whiteSpace: 'pre-line',
             }}
           >
             {error}
