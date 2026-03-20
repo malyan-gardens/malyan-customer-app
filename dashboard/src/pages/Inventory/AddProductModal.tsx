@@ -41,7 +41,6 @@ export default function AddProductModal({ onClose, onSaved }: Props) {
     quantity: '',
     category: 'other',
   });
-  const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,7 +50,6 @@ export default function AddProductModal({ onClose, onSaved }: Props) {
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    setImageFile(file);
     const url = URL.createObjectURL(file);
     setImagePreview(url);
   }
