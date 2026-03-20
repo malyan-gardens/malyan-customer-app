@@ -80,15 +80,6 @@ export default function AddProductModal({ onClose, onSaved }: Props) {
 
     setSaving(true);
 
-    const overallTimeoutMs = 10000; // مطلوب: 10 ثواني
-    let timedOut = false;
-
-    const timeoutId = setTimeout(() => {
-      timedOut = true;
-      setSaving(false);
-      setError('تعذر إتمام الحفظ خلال 10 ثوانٍ. تحقق من الاتصال بالإنترنت وصلاحيات INSERT على جدول `inventory`.');
-    }, overallTimeoutMs);
-
     try {
       let imageUrl: string | null = null;
       let uploadErrorMsg: string | null = null;
@@ -118,9 +109,6 @@ export default function AddProductModal({ onClose, onSaved }: Props) {
         }
       }
 
-      // إذا وصلت المهلة أثناء الرفع/الانتظار
-      if (timedOut) return;
-
       const { error: insertErr } = await supabase.from('inventory').insert({
         name_ar: form.name_ar.trim(),
         image_url: imageUrl,
@@ -129,8 +117,6 @@ export default function AddProductModal({ onClose, onSaved }: Props) {
         quantity: quantity,
         category: form.category,
       });
-
-      if (timedOut) return;
 
       if (insertErr) {
         const base = insertErr.message || 'فشل حفظ المنتج';
@@ -142,12 +128,10 @@ export default function AddProductModal({ onClose, onSaved }: Props) {
       // نجاح: نغلق الـ modal ونحدث القائمة عبر onSaved
       onSaved();
     } catch (e) {
-      if (timedOut) return;
       const msg = e instanceof Error ? e.message : 'حدث خطأ غير معروف أثناء الحفظ';
       setError(msg);
     } finally {
-      clearTimeout(timeoutId);
-      if (!timedOut) setSaving(false);
+      setSaving(false);
     }
   }
 
