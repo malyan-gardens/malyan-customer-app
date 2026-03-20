@@ -44,7 +44,7 @@ export default function AddProductModal({ onClose, onSaved }: Props) {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<string | null>(null);
   const [uploadNotice, setUploadNotice] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -56,84 +56,32 @@ export default function AddProductModal({ onClose, onSaved }: Props) {
     setImagePreview(url);
   }
 
-  async function handleSave() {
-    setError('');
+  const handleSave = async () => {
+    if (!form.name_ar.trim()) return;
+    setSaving(true);
+    setError(null);
     setUploadNotice('');
 
-    if (!form.name_ar.trim()) {
-      setError('أدخل اسم المنتج');
-      return;
-    }
-
-    const sellPrice = parseFloat(form.sell_price);
-    const purchasePrice = parseFloat(form.purchase_price) || 0;
-    const quantity = parseInt(form.quantity, 10) || 0;
-
-    if (isNaN(sellPrice) || sellPrice < 0) {
-      setError('سعر البيع غير صحيح');
-      return;
-    }
-    if (quantity < 0) {
-      setError('الكمية غير صحيحة');
-      return;
-    }
-
-    setSaving(true);
-
     try {
-      let imageUrl: string | null = null;
-      let uploadErrorMsg: string | null = null;
-
-      // رفع الصورة اختياري: إذا فشل نكمل بدون صورة
-      if (imageFile) {
-        try {
-          const ext = imageFile.name.split('.').pop() || 'jpg';
-          const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-
-          const { error: uploadErr } = await supabase.storage
-            .from('inventory-images')
-            .upload(path, imageFile, { upsert: false });
-
-          if (uploadErr) {
-            uploadErrorMsg = uploadErr.message || 'خطأ أثناء رفع الصورة';
-            setUploadNotice('تعذر رفع الصورة، وسيتم حفظ المنتج بدون صورة.');
-            console.warn('[inventory] image upload failed:', uploadErr);
-          } else {
-            const { data: urlData } = supabase.storage.from('inventory-images').getPublicUrl(path);
-            imageUrl = urlData.publicUrl ?? null;
-          }
-        } catch (e) {
-          uploadErrorMsg = e instanceof Error ? e.message : String(e);
-          setUploadNotice('تعذر رفع الصورة، وسيتم حفظ المنتج بدون صورة.');
-          console.warn('[inventory] image upload exception:', e);
-        }
-      }
-
-      const { error: insertErr } = await supabase.from('inventory').insert({
-        name_ar: form.name_ar.trim(),
-        image_url: imageUrl,
-        purchase_price: purchasePrice,
-        sell_price: sellPrice,
-        quantity: quantity,
+      const { error: insertError } = await supabase.from('inventory').insert({
+        name_ar: form.name_ar,
         category: form.category,
+        purchase_price: Number(form.purchase_price) || 0,
+        sell_price: Number(form.sell_price) || 0,
+        quantity: Number(form.quantity) || 0,
+        image_url: null,
       });
 
-      if (insertErr) {
-        const base = insertErr.message || 'فشل حفظ المنتج';
-        const uploadPart = uploadErrorMsg ? `\nتعذر رفع الصورة (غير حاسم): ${uploadErrorMsg}` : '';
-        setError(base + uploadPart);
-        return;
-      }
+      if (insertError) throw insertError;
 
-      // نجاح: نغلق الـ modal ونحدث القائمة عبر onSaved
       onSaved();
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'حدث خطأ غير معروف أثناء الحفظ';
-      setError(msg);
+      onClose();
+    } catch (err: any) {
+      setError(err?.message || 'فشل الحفظ');
     } finally {
       setSaving(false);
     }
-  }
+  };
 
   return (
     <div
