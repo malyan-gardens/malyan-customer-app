@@ -36,7 +36,7 @@ const labelStyle: React.CSSProperties = {
 export default function AddProductModal({ onClose, onSaved }: Props) {
   const [form, setForm] = useState({
     name_ar: '',
-    cost_price: '',
+    purchase_price: '',
     sell_price: '',
     quantity: '',
     category: 'other',
@@ -45,6 +45,7 @@ export default function AddProductModal({ onClose, onSaved }: Props) {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [uploadNotice, setUploadNotice] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -57,72 +58,96 @@ export default function AddProductModal({ onClose, onSaved }: Props) {
 
   async function handleSave() {
     setError('');
+    setUploadNotice('');
+
     if (!form.name_ar.trim()) {
       setError('أدخل اسم المنتج');
       return;
     }
+
     const sellPrice = parseFloat(form.sell_price);
-    const costPrice = parseFloat(form.cost_price) || 0;
+    const purchasePrice = parseFloat(form.purchase_price) || 0;
     const quantity = parseInt(form.quantity, 10) || 0;
+
     if (isNaN(sellPrice) || sellPrice < 0) {
       setError('سعر البيع غير صحيح');
+      return;
+    }
+    if (quantity < 0) {
+      setError('الكمية غير صحيحة');
       return;
     }
 
     setSaving(true);
 
-    // مهلة أمان فقط: إذا لم تنته العملية خلال 45 ثانية نوقف التحميل
-    const timeoutMs = 45000;
+    const overallTimeoutMs = 10000; // مطلوب: 10 ثواني
+    let timedOut = false;
+
     const timeoutId = setTimeout(() => {
+      timedOut = true;
       setSaving(false);
-      setError(
-        'انتهت المهلة.\nتحقق من: الاتصال بالإنترنت · مشروع Supabase غير متوقف · جدول inventory موجود وصلاحيات الإدراج مفعّلة'
-      );
-    }, timeoutMs);
-
-    function done() {
-      clearTimeout(timeoutId);
-      setSaving(false);
-    }
-
-    let imageUrl: string | null = null;
-    if (imageFile) {
-      try {
-        const ext = imageFile.name.split('.').pop() || 'jpg';
-        const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-        const { error: uploadErr } = await supabase.storage
-          .from('inventory-images')
-          .upload(path, imageFile, { upsert: false });
-        if (!uploadErr) {
-          const { data: urlData } = supabase.storage.from('inventory-images').getPublicUrl(path);
-          imageUrl = urlData.publicUrl;
-        }
-      } catch {
-        // نكمل بدون صورة
-      }
-    }
+      setError('تعذر إتمام الحفظ خلال 10 ثوانٍ. تحقق من الاتصال بالإنترنت وصلاحيات INSERT على جدول `inventory`.');
+    }, overallTimeoutMs);
 
     try {
+      let imageUrl: string | null = null;
+      let uploadErrorMsg: string | null = null;
+
+      // رفع الصورة اختياري: إذا فشل نكمل بدون صورة
+      if (imageFile) {
+        try {
+          const ext = imageFile.name.split('.').pop() || 'jpg';
+          const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+
+          const { error: uploadErr } = await supabase.storage
+            .from('inventory-images')
+            .upload(path, imageFile, { upsert: false });
+
+          if (uploadErr) {
+            uploadErrorMsg = uploadErr.message || 'خطأ أثناء رفع الصورة';
+            setUploadNotice('تعذر رفع الصورة، وسيتم حفظ المنتج بدون صورة.');
+            console.warn('[inventory] image upload failed:', uploadErr);
+          } else {
+            const { data: urlData } = supabase.storage.from('inventory-images').getPublicUrl(path);
+            imageUrl = urlData.publicUrl ?? null;
+          }
+        } catch (e) {
+          uploadErrorMsg = e instanceof Error ? e.message : String(e);
+          setUploadNotice('تعذر رفع الصورة، وسيتم حفظ المنتج بدون صورة.');
+          console.warn('[inventory] image upload exception:', e);
+        }
+      }
+
+      // إذا وصلت المهلة أثناء الرفع/الانتظار
+      if (timedOut) return;
+
       const { error: insertErr } = await supabase.from('inventory').insert({
         name_ar: form.name_ar.trim(),
         image_url: imageUrl,
-        cost_price: costPrice,
+        purchase_price: purchasePrice,
         sell_price: sellPrice,
         quantity: quantity,
         category: form.category,
       });
 
+      if (timedOut) return;
+
       if (insertErr) {
-        setError(insertErr.message || 'فشل الحفظ');
-        done();
+        const base = insertErr.message || 'فشل حفظ المنتج';
+        const uploadPart = uploadErrorMsg ? `\nتعذر رفع الصورة (غير حاسم): ${uploadErrorMsg}` : '';
+        setError(base + uploadPart);
         return;
       }
-      done();
+
+      // نجاح: نغلق الـ modal ونحدث القائمة عبر onSaved
       onSaved();
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'حدث خطأ. تحقق من الاتصال وحاول مرة أخرى.';
+      if (timedOut) return;
+      const msg = e instanceof Error ? e.message : 'حدث خطأ غير معروف أثناء الحفظ';
       setError(msg);
-      done();
+    } finally {
+      clearTimeout(timeoutId);
+      if (!timedOut) setSaving(false);
     }
   }
 
@@ -171,6 +196,23 @@ export default function AddProductModal({ onClose, onSaved }: Props) {
             }}
           >
             {error}
+          </div>
+        )}
+
+        {uploadNotice && !error && (
+          <div
+            style={{
+              background: 'rgba(255,195,0,0.10)',
+              border: '1px solid rgba(255,195,0,0.35)',
+              borderRadius: 8,
+              padding: 10,
+              color: '#d6a500',
+              fontSize: 13,
+              marginBottom: 16,
+              whiteSpace: 'pre-line',
+            }}
+          >
+            {uploadNotice}
           </div>
         )}
 
@@ -230,8 +272,8 @@ export default function AddProductModal({ onClose, onSaved }: Props) {
               min={0}
               step={0.01}
               placeholder="0"
-              value={form.cost_price}
-              onChange={(e) => setForm((f) => ({ ...f, cost_price: e.target.value }))}
+              value={form.purchase_price}
+              onChange={(e) => setForm((f) => ({ ...f, purchase_price: e.target.value }))}
               style={inputStyle}
             />
           </div>

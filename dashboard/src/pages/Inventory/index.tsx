@@ -6,7 +6,8 @@ interface Product {
   id: string;
   name_ar: string;
   image_url: string | null;
-  cost_price: number;
+  purchase_price?: number | null;
+  cost_price?: number | null;
   sell_price: number;
   quantity: number;
   category: string;
@@ -139,7 +140,7 @@ export default function Inventory() {
                   {CATEGORY_LABELS[p.category] ?? p.category}
                 </span>
                 <div style={{ fontSize: 13, color: '#7a9480', marginBottom: 4 }}>
-                  شراء: <span style={{ color: '#e8f0ea' }}>{formatQAR(p.cost_price)}</span>
+                  شراء: <span style={{ color: '#e8f0ea' }}>{formatQAR((p.purchase_price ?? p.cost_price ?? 0) as number)}</span>
                 </div>
                 <div style={{ fontSize: 13, color: '#7a9480', marginBottom: 4 }}>
                   بيع: <span style={{ color: '#4cdf80', fontWeight: 700 }}>{formatQAR(p.sell_price)}</span>

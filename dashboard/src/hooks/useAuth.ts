@@ -70,5 +70,44 @@ export function useAuth() {
 
   const signOut = () => supabase.auth.signOut();
 
+  // تسجيل خروج تلقائي بعد 24 ساعة خمول (عدم تفاعل)
+  useEffect(() => {
+    if (!user) return;
+
+    const inactivityMs = 24 * 60 * 60 * 1000;
+    const storageKey = 'malyan_lastActivity';
+    let signedOut = false;
+
+    const markActivity = () => {
+      try {
+        localStorage.setItem(storageKey, String(Date.now()));
+      } catch {
+        // تجاهل مشاكل التخزين (مثلاً في وضع الخصوصية)
+      }
+    };
+
+    markActivity();
+
+    const events: Array<keyof WindowEventMap> = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'click'];
+    events.forEach((ev) => window.addEventListener(ev, markActivity));
+
+    const intervalId = window.setInterval(() => {
+      try {
+        const last = Number(localStorage.getItem(storageKey) || '0');
+        if (!signedOut && last > 0 && Date.now() - last > inactivityMs) {
+          signedOut = true;
+          signOut();
+        }
+      } catch {
+        // تجاهل
+      }
+    }, 60 * 1000); // كل دقيقة
+
+    return () => {
+      events.forEach((ev) => window.removeEventListener(ev, markActivity));
+      clearInterval(intervalId);
+    };
+  }, [user]);
+
   return { user, role, loading, signOut };
 }

@@ -13,6 +13,15 @@ create table if not exists inventory (
   updated_at timestamptz default now()
 );
 
+-- If the table already exists (but with an older schema), ensure all expected columns exist.
+-- (Fixes errors like: "column cost_price does not exist")
+alter table inventory add column if not exists image_url text;
+alter table inventory add column if not exists cost_price numeric(10,2) default 0;
+alter table inventory add column if not exists sell_price numeric(10,2) default 0;
+alter table inventory add column if not exists quantity integer default 0;
+alter table inventory add column if not exists category text default 'other';
+alter table inventory add column if not exists name_ar text not null default '';
+
 -- تحديث updated_at تلقائياً
 create or replace function update_inventory_updated_at()
 returns trigger as $$
@@ -30,6 +39,7 @@ create trigger inventory_updated_at
 -- RLS
 alter table inventory enable row level security;
 
+drop policy if exists "Authenticated users can manage inventory" on inventory;
 create policy "Authenticated users can manage inventory"
   on inventory for all
   using (auth.role() = 'authenticated')
