@@ -58,10 +58,8 @@ export default function AddProductModal({ onClose, onSaved }: Props) {
     if (!form.name_ar.trim()) return;
     setSaving(true);
     setError(null);
-    setUploadNotice('');
-
     try {
-      const { error: insertError } = await supabase.from('inventory').insert({
+      const { error } = await supabase.from('inventory').insert({
         name_ar: form.name_ar,
         category: form.category,
         purchase_price: Number(form.purchase_price) || 0,
@@ -69,9 +67,7 @@ export default function AddProductModal({ onClose, onSaved }: Props) {
         quantity: Number(form.quantity) || 0,
         image_url: null,
       });
-
-      if (insertError) throw insertError;
-
+      if (error) throw error;
       onSaved();
       onClose();
     } catch (err: any) {
