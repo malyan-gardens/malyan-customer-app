@@ -44,7 +44,6 @@ export default function AddProductModal({ onClose, onSaved }: Props) {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [uploadNotice, setUploadNotice] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -122,23 +121,6 @@ export default function AddProductModal({ onClose, onSaved }: Props) {
             }}
           >
             {error}
-          </div>
-        )}
-
-        {uploadNotice && !error && (
-          <div
-            style={{
-              background: 'rgba(255,195,0,0.10)',
-              border: '1px solid rgba(255,195,0,0.35)',
-              borderRadius: 8,
-              padding: 10,
-              color: '#d6a500',
-              fontSize: 13,
-              marginBottom: 16,
-              whiteSpace: 'pre-line',
-            }}
-          >
-            {uploadNotice}
           </div>
         )}
 
