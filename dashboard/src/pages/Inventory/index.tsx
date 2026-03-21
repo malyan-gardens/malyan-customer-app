@@ -1,18 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import AddProductModal from './AddProductModal';
-
-interface Product {
-  id: string;
-  name_ar: string;
-  image_url: string | null;
-  purchase_price?: number | null;
-  selling_price?: number | null;
-  cost_price?: number | null;
-  sell_price?: number | null;
-  quantity: number;
-  category: string;
-}
+import AddProductModal, { type InventoryProductRow } from './AddProductModal';
 
 const CATEGORY_LABELS: Record<string, string> = {
   natural: 'نباتات طبيعية',
@@ -25,11 +13,22 @@ const boxStyle = { background: '#0f1a12', border: '1px solid #2a3d2e', borderRad
 
 const FETCH_TIMEOUT_MS = 5000;
 
+const iconBtnStyle: React.CSSProperties = {
+  border: '1px solid #2a3d2e',
+  background: '#162019',
+  borderRadius: 8,
+  padding: '6px 10px',
+  cursor: 'pointer',
+  fontSize: 16,
+  lineHeight: 1,
+  color: '#7a9480',
+};
+
 export default function Inventory() {
-  const [products, setProducts] = useState<Product[]>([]);
+  const [products, setProducts] = useState<InventoryProductRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  /** سبب عرض قائمة فارغة: مهلة، خطأ، أو RLS */
+  const [editingProduct, setEditingProduct] = useState<InventoryProductRow | null>(null);
   const [fetchWarning, setFetchWarning] = useState<string | null>(null);
 
   async function fetchProducts() {
@@ -72,7 +71,10 @@ export default function Inventory() {
         return;
       }
 
-      const { data, error } = outcome as { data: Product[] | null; error: { message: string; code?: string } | null };
+      const { data, error } = outcome as {
+        data: InventoryProductRow[] | null;
+        error: { message: string; code?: string } | null;
+      };
       console.log('[inventory] fetch result', { data, error, rowCount: data?.length ?? 0 });
 
       if (error) {
@@ -82,7 +84,7 @@ export default function Inventory() {
         return;
       }
 
-      setProducts((data as Product[]) ?? []);
+      setProducts((data as InventoryProductRow[]) ?? []);
     } catch (e) {
       console.error('[inventory] fetch exception', e);
       setProducts([]);
@@ -96,16 +98,53 @@ export default function Inventory() {
     fetchProducts();
   }, []);
 
+  async function handleDelete(p: InventoryProductRow) {
+    if (
+      !window.confirm(
+        `هل أنت متأكد من حذف «${p.name_ar}»؟\nلا يمكن التراجع عن هذا الإجراء.`
+      )
+    ) {
+      return;
+    }
+    const { error } = await supabase.from('inventory').delete().eq('id', p.id);
+    if (error) {
+      alert(error.message || 'فشل الحذف');
+      console.error('[inventory] delete', error);
+      return;
+    }
+    await fetchProducts();
+  }
+
+  function openAddModal() {
+    setEditingProduct(null);
+    setShowModal(true);
+  }
+
+  function openEditModal(p: InventoryProductRow) {
+    setEditingProduct(p);
+    setShowModal(true);
+  }
+
+  function closeModal() {
+    setShowModal(false);
+    setEditingProduct(null);
+  }
+
   function formatQAR(n: number) {
     return new Intl.NumberFormat('ar-QA', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n) + ' QAR';
   }
 
   return (
     <div style={{ padding: 28, direction: 'rtl', fontFamily: 'Cairo, Tajawal, sans-serif' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 16 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 700, color: '#e8f0ea' }}>📦 المخزون</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8, flexWrap: 'wrap', gap: 16 }}>
+        <div>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: '#e8f0ea', marginBottom: 8 }}>📦 المخزون</h1>
+          <p style={{ fontSize: 12, color: '#5a7058', margin: 0, maxWidth: 560, lineHeight: 1.5 }}>
+            الكميات والأسعار هنا هي المصدر الوحيد للحقيقة — تطبيق العملاء يقرأ نفس قاعدة البيانات ويعكس التغييرات تلقائياً.
+          </p>
+        </div>
         <button
-          onClick={() => setShowModal(true)}
+          onClick={openAddModal}
           style={{
             background: 'linear-gradient(135deg, #1a7a3c, #22a84f)',
             border: 'none',
@@ -148,7 +187,7 @@ export default function Inventory() {
           <div style={{ fontSize: 48, marginBottom: 16 }}>📭</div>
           <div style={{ fontSize: 16, marginBottom: 8 }}>لا يوجد منتجات في المخزون</div>
           <button
-            onClick={() => setShowModal(true)}
+            onClick={openAddModal}
             style={{
               marginTop: 16,
               background: '#1a7a3c',
@@ -187,20 +226,47 @@ export default function Inventory() {
                   alignItems: 'center',
                   justifyContent: 'center',
                   overflow: 'hidden',
+                  position: 'relative',
                 }}
               >
                 {p.image_url ? (
                   <img
                     src={p.image_url}
                     alt={p.name_ar}
+                    loading="lazy"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                    }}
                     style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                   />
                 ) : (
                   <span style={{ fontSize: 48, opacity: 0.4 }}>🪴</span>
                 )}
               </div>
-              <div style={{ padding: 16 }}>
-                <h3 style={{ fontSize: 16, fontWeight: 700, color: '#e8f0ea', marginBottom: 6 }}>{p.name_ar}</h3>
+              <div style={{ padding: 16, flex: 1, display: 'flex', flexDirection: 'column' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 8 }}>
+                  <h3 style={{ fontSize: 16, fontWeight: 700, color: '#e8f0ea', margin: 0, flex: 1 }}>{p.name_ar}</h3>
+                  <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                    <button
+                      type="button"
+                      title="تعديل"
+                      aria-label="تعديل المنتج"
+                      onClick={() => openEditModal(p)}
+                      style={iconBtnStyle}
+                    >
+                      ✏️
+                    </button>
+                    <button
+                      type="button"
+                      title="حذف"
+                      aria-label="حذف المنتج"
+                      onClick={() => handleDelete(p)}
+                      style={{ ...iconBtnStyle, borderColor: 'rgba(224,82,82,0.35)', color: '#c06060' }}
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                </div>
                 <span
                   style={{
                     display: 'inline-block',
@@ -210,6 +276,7 @@ export default function Inventory() {
                     padding: '3px 8px',
                     borderRadius: 6,
                     marginBottom: 10,
+                    alignSelf: 'flex-start',
                   }}
                 >
                   {CATEGORY_LABELS[p.category] ?? p.category}
@@ -223,7 +290,7 @@ export default function Inventory() {
                     {formatQAR((p.selling_price ?? p.sell_price ?? 0) as number)}
                   </span>
                 </div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: p.quantity > 0 ? '#4cdf80' : '#e05252' }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: p.quantity > 0 ? '#4cdf80' : '#e05252', marginTop: 'auto' }}>
                   الكمية: {p.quantity}
                 </div>
               </div>
@@ -234,9 +301,10 @@ export default function Inventory() {
 
       {showModal && (
         <AddProductModal
-          onClose={() => setShowModal(false)}
+          product={editingProduct}
+          onClose={closeModal}
           onSaved={() => {
-            setShowModal(false);
+            closeModal();
             fetchProducts();
           }}
         />

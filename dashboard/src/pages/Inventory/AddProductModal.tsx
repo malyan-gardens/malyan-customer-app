@@ -1,9 +1,24 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
+
+/** يطابق صفوف جدول inventory من Supabase */
+export interface InventoryProductRow {
+  id: string;
+  name_ar: string;
+  image_url: string | null;
+  purchase_price?: number | null;
+  selling_price?: number | null;
+  cost_price?: number | null;
+  sell_price?: number | null;
+  quantity: number;
+  category: string;
+}
 
 interface Props {
   onClose: () => void;
   onSaved: () => void;
+  /** إن وُجد: وضع التعديل مع تعبئة الحقول */
+  product?: InventoryProductRow | null;
 }
 
 const CATEGORIES = [
@@ -33,7 +48,19 @@ const labelStyle: React.CSSProperties = {
   marginBottom: 6,
 };
 
-export default function AddProductModal({ onClose, onSaved }: Props) {
+function purchaseFromRow(p: InventoryProductRow): string {
+  const v = p.purchase_price ?? p.cost_price;
+  return v != null && v !== '' ? String(v) : '';
+}
+
+function sellingFromRow(p: InventoryProductRow): string {
+  const v = p.selling_price ?? p.sell_price;
+  return v != null && v !== '' ? String(v) : '';
+}
+
+export default function AddProductModal({ onClose, onSaved, product }: Props) {
+  const isEdit = Boolean(product?.id);
+
   const [formData, setFormData] = useState({
     name_ar: '',
     purchase_price: '',
@@ -41,51 +68,119 @@ export default function AddProductModal({ onClose, onSaved }: Props) {
     quantity: '',
     category: 'other',
   });
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  /** معاينة ملف جديد محلي */
+  const [objectPreviewUrl, setObjectPreviewUrl] = useState<string | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [existingImageUrl, setExistingImageUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  useEffect(() => {
+    if (product) {
+      setFormData({
+        name_ar: product.name_ar ?? '',
+        purchase_price: purchaseFromRow(product),
+        selling_price: sellingFromRow(product),
+        quantity: String(product.quantity ?? 0),
+        category: product.category || 'other',
+      });
+      setExistingImageUrl(product.image_url);
+      setImageFile(null);
+      if (objectPreviewUrl) {
+        URL.revokeObjectURL(objectPreviewUrl);
+        setObjectPreviewUrl(null);
+      }
+    } else {
+      setFormData({
+        name_ar: '',
+        purchase_price: '',
+        selling_price: '',
+        quantity: '',
+        category: 'other',
+      });
+      setExistingImageUrl(null);
+      setImageFile(null);
+      if (objectPreviewUrl) {
+        URL.revokeObjectURL(objectPreviewUrl);
+        setObjectPreviewUrl(null);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- إعادة تعيين عند تغيير المنتج/الوضع فقط
+  }, [product?.id]);
+
+  useEffect(() => {
+    return () => {
+      if (objectPreviewUrl) URL.revokeObjectURL(objectPreviewUrl);
+    };
+  }, [objectPreviewUrl]);
+
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const url = URL.createObjectURL(file);
-    setImagePreview(url);
+    if (objectPreviewUrl) URL.revokeObjectURL(objectPreviewUrl);
+    setImageFile(file);
+    setObjectPreviewUrl(URL.createObjectURL(file));
+  }
+
+  async function uploadImageIfNeeded(): Promise<string | null> {
+    if (!imageFile) {
+      return existingImageUrl;
+    }
+    const ext = imageFile.name.split('.').pop() || 'jpg';
+    const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+    const { error: uploadErr } = await supabase.storage
+      .from('inventory-images')
+      .upload(path, imageFile, { upsert: true, cacheControl: '3600' });
+    if (uploadErr) {
+      console.error('[inventory] storage upload', uploadErr);
+      throw new Error(uploadErr.message || 'فشل رفع الصورة');
+    }
+    const { data: urlData } = supabase.storage.from('inventory-images').getPublicUrl(path);
+    return urlData.publicUrl ?? null;
   }
 
   const handleSave = async () => {
-    console.log('Save started');
-    console.log('supabase client', supabase);
+    if (!formData.name_ar.trim()) {
+      setError('أدخل اسم المنتج');
+      return;
+    }
 
     setSaving(true);
     setError(null);
     try {
+      let imageUrl: string | null = existingImageUrl;
+      if (imageFile) {
+        imageUrl = await uploadImageIfNeeded();
+      }
+
       const row = {
-        name_ar: formData.name_ar.trim() || 'test',
-        // يجب أن تكون واحدة من: natural | artificial | soil_supplies | other (ليس النص العربي)
+        name_ar: formData.name_ar.trim(),
         category: formData.category || 'other',
         purchase_price: Number(formData.purchase_price) || 0,
         selling_price: Number(formData.selling_price) || 0,
         quantity: Number(formData.quantity) || 0,
-        image_url: null as string | null,
+        image_url: imageUrl,
       };
 
-      console.log('Inserting...', row);
+      if (isEdit && product) {
+        const { error: upErr } = await supabase.from('inventory').update(row).eq('id', product.id);
+        if (upErr) throw upErr;
+      } else {
+        const { error: insErr } = await supabase.from('inventory').insert([row]);
+        if (insErr) throw insErr;
+      }
 
-      const result = await supabase.from('inventory').insert([row]);
-
-      console.log('Result:', result);
-      if (result.error) throw result.error;
       onSaved();
-      onClose();
     } catch (err: unknown) {
-      console.log('Error:', err);
       const msg = err instanceof Error ? err.message : 'فشل الحفظ';
       setError(msg);
     } finally {
       setSaving(false);
     }
   };
+
+  const previewSrc = objectPreviewUrl || existingImageUrl;
 
   return (
     <div
@@ -115,7 +210,7 @@ export default function AddProductModal({ onClose, onSaved }: Props) {
         }}
       >
         <h2 style={{ fontSize: 18, fontWeight: 700, color: '#e8f0ea', marginBottom: 20 }}>
-          + إضافة منتج جديد
+          {isEdit ? '✏️ تعديل منتج' : '+ إضافة منتج جديد'}
         </h2>
 
         {error && (
@@ -168,12 +263,12 @@ export default function AddProductModal({ onClose, onSaved }: Props) {
               fontSize: 13,
             }}
           >
-            {imagePreview ? (
+            {previewSrc ? (
               <div>
                 <img
-                  src={imagePreview}
+                  src={previewSrc}
                   alt="معاينة"
-                  style={{ maxHeight: 120, borderRadius: 8, marginBottom: 8 }}
+                  style={{ maxHeight: 120, borderRadius: 8, marginBottom: 8, objectFit: 'contain' }}
                 />
                 <div>اضغط لتغيير الصورة</div>
               </div>
@@ -269,7 +364,7 @@ export default function AddProductModal({ onClose, onSaved }: Props) {
               cursor: saving ? 'not-allowed' : 'pointer',
             }}
           >
-            {saving ? '⏳ جاري الحفظ...' : '💾 حفظ'}
+            {saving ? '⏳ جاري الحفظ...' : isEdit ? '💾 حفظ التعديلات' : '💾 حفظ'}
           </button>
         </div>
       </div>
