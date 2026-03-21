@@ -23,16 +23,73 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 const boxStyle = { background: '#0f1a12', border: '1px solid #2a3d2e', borderRadius: 14 };
 
+const FETCH_TIMEOUT_MS = 5000;
+
 export default function Inventory() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  /** سبب عرض قائمة فارغة: مهلة، خطأ، أو RLS */
+  const [fetchWarning, setFetchWarning] = useState<string | null>(null);
 
   async function fetchProducts() {
     setLoading(true);
-    const { data } = await supabase.from('inventory').select('*').order('created_at', { ascending: false });
-    setProducts((data as Product[]) ?? []);
-    setLoading(false);
+    setFetchWarning(null);
+
+    try {
+      const url = import.meta.env.VITE_SUPABASE_URL;
+      const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      let urlHost = '—';
+      try {
+        if (url) urlHost = new URL(url).host;
+      } catch {
+        urlHost = 'invalid';
+      }
+      console.log('[inventory] fetch — env check', {
+        viteUrlHost: urlHost,
+        viteKeySet: Boolean(key && String(key).length > 20),
+      });
+
+      const queryPromise = supabase
+        .from('inventory')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      const timeoutPromise = new Promise<{ __timedOut: true }>((resolve) =>
+        setTimeout(() => resolve({ __timedOut: true }), FETCH_TIMEOUT_MS)
+      );
+
+      const outcome = await Promise.race([queryPromise, timeoutPromise]);
+
+      if (outcome && '__timedOut' in outcome && outcome.__timedOut) {
+        console.warn(
+          `[inventory] fetch timed out after ${FETCH_TIMEOUT_MS}ms — showing empty state (check RLS / network / Supabase project)`
+        );
+        setProducts([]);
+        setFetchWarning(
+          'انتهت مهلة تحميل المخزون. قد تكون صلاحيات القراءة على جدول inventory غير مفعّلة للمفتاح anon (RLS).'
+        );
+        return;
+      }
+
+      const { data, error } = outcome as { data: Product[] | null; error: { message: string; code?: string } | null };
+      console.log('[inventory] fetch result', { data, error, rowCount: data?.length ?? 0 });
+
+      if (error) {
+        console.error('[inventory] fetch error detail', error);
+        setProducts([]);
+        setFetchWarning(error.message || 'فشل جلب المخزون (تحقق من RLS والمفتاح anon)');
+        return;
+      }
+
+      setProducts((data as Product[]) ?? []);
+    } catch (e) {
+      console.error('[inventory] fetch exception', e);
+      setProducts([]);
+      setFetchWarning(e instanceof Error ? e.message : 'خطأ غير متوقع أثناء جلب المخزون');
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -71,6 +128,23 @@ export default function Inventory() {
 
       {!loading && products.length === 0 && (
         <div style={{ ...boxStyle, padding: 60, textAlign: 'center', color: '#4a6450' }}>
+          {fetchWarning && (
+            <div
+              style={{
+                background: 'rgba(224,82,82,0.12)',
+                border: '1px solid rgba(224,82,82,0.35)',
+                borderRadius: 10,
+                padding: 14,
+                color: '#e05252',
+                fontSize: 13,
+                marginBottom: 20,
+                textAlign: 'right',
+                whiteSpace: 'pre-line',
+              }}
+            >
+              {fetchWarning}
+            </div>
+          )}
           <div style={{ fontSize: 48, marginBottom: 16 }}>📭</div>
           <div style={{ fontSize: 16, marginBottom: 8 }}>لا يوجد منتجات في المخزون</div>
           <button
