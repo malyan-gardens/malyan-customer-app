@@ -23,10 +23,9 @@ export default function Login() {
     }
 
     setLoading(true);
-    const redirectTo = `${window.location.origin}/`;
     const { error: err } = await supabase.auth.signInWithOtp({
       email: trimmed,
-      options: { emailRedirectTo: redirectTo },
+      options: { emailRedirectTo: 'https://malyan-app.vercel.app/dashboard' },
     });
 
     if (err) {
@@ -156,7 +155,7 @@ export default function Login() {
                 whiteSpace: 'pre-line',
               }}
             >
-              تم إرسال رابط الدخول إلى بريدك الإلكتروني
+              ✓ تم إرسال رابط الدخول إلى بريدك الإلكتروني
             </div>
             <button
               type="button"

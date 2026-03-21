@@ -10,39 +10,33 @@ export function useAuth() {
   useEffect(() => {
     let cancelled = false;
 
-    function done() {
-      if (!cancelled) setLoading(false);
-    }
-
-    // مهلة: إذا لم يُستجب خلال 6 ثوانٍ نوقف التحميل (تجنب البقاء على "جاري التحميل" للأبد)
-    const timeoutId = setTimeout(done, 6000);
-
+    // 1) دائماً: التحقق من الجلسة المحفوظة أولاً قبل أي توجيه
     supabase.auth
       .getSession()
       .then(async ({ data: { session } }) => {
         if (cancelled) return;
         setUser(session?.user ?? null);
-        try {
-          if (session?.user) {
+        if (session?.user) {
+          try {
             const { data } = await supabase
               .from('profiles')
               .select('role')
               .eq('id', session.user.id)
               .maybeSingle();
             if (!cancelled) setRole(data?.role ?? '');
+          } catch {
+            if (!cancelled) setRole('');
           }
-        } catch {
-          // تجاهل خطأ profiles (جدول أو RLS)
-        } finally {
-          clearTimeout(timeoutId);
-          done();
+        } else {
+          setRole('');
         }
+        if (!cancelled) setLoading(false);
       })
       .catch(() => {
-        clearTimeout(timeoutId);
-        done();
+        if (!cancelled) setLoading(false);
       });
 
+    // 2) الاستماع لتغييرات الجلسة (تسجيل دخول/خروج، Magic Link، إلخ)
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (_event, session) => {
@@ -58,19 +52,20 @@ export function useAuth() {
         } catch {
           setRole('');
         }
+      } else {
+        setRole('');
       }
     });
 
     return () => {
       cancelled = true;
-      clearTimeout(timeoutId);
       subscription.unsubscribe();
     };
   }, []);
 
   const signOut = () => supabase.auth.signOut();
 
-  // تسجيل خروج تلقائي بعد 24 ساعة خمول (عدم تفاعل)
+  // تسجيل خروج تلقائي بعد 24 ساعة خمول
   useEffect(() => {
     if (!user) return;
 
@@ -82,7 +77,7 @@ export function useAuth() {
       try {
         localStorage.setItem(storageKey, String(Date.now()));
       } catch {
-        // تجاهل مشاكل التخزين (مثلاً في وضع الخصوصية)
+        // ignore
       }
     };
 
@@ -99,9 +94,9 @@ export function useAuth() {
           signOut();
         }
       } catch {
-        // تجاهل
+        // ignore
       }
-    }, 60 * 1000); // كل دقيقة
+    }, 60 * 1000);
 
     return () => {
       events.forEach((ev) => window.removeEventListener(ev, markActivity));
