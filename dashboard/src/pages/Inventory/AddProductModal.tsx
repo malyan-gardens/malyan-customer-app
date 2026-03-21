@@ -58,19 +58,39 @@ export default function AddProductModal({ onClose, onSaved }: Props) {
     setSaving(true);
     setError(null);
     try {
-      const { error } = await supabase.from('inventory').insert({
-        name_ar: form.name_ar,
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      // تشخيص: جلسة المستخدم (بدون طباعة التوكن)
+      console.log('[inventory] save — session', session
+        ? { userId: session.user.id, email: session.user.email, expires_at: session.expires_at }
+        : null);
+
+      if (!session) {
+        throw new Error('لا توجد جلسة تسجيل دخول. سجّل الدخول ثم أعد المحاولة.');
+      }
+
+      // يطابق مخطط 002_inventory.sql: cost_price + sell_price (وليس purchase_price / selling_price)
+      const payload = {
+        name_ar: form.name_ar.trim(),
         category: form.category,
-        purchase_price: Number(form.purchase_price) || 0,
+        cost_price: Number(form.purchase_price) || 0,
         sell_price: Number(form.sell_price) || 0,
         quantity: Number(form.quantity) || 0,
-        image_url: null,
-      });
+        image_url: null as string | null,
+      };
+
+      console.log('[inventory] save — insert payload', payload);
+
+      const { error } = await supabase.from('inventory').insert(payload);
       if (error) throw error;
       onSaved();
       onClose();
-    } catch (err: any) {
-      setError(err?.message || 'فشل الحفظ');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'فشل الحفظ';
+      console.error('[inventory] save — error', err);
+      setError(msg);
     } finally {
       setSaving(false);
     }
