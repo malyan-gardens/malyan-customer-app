@@ -50,12 +50,12 @@ const labelStyle: React.CSSProperties = {
 
 function purchaseFromRow(p: InventoryProductRow): string {
   const v = p.purchase_price ?? p.cost_price;
-  return v != null && v !== '' ? String(v) : '';
+  return v != null && !Number.isNaN(Number(v)) ? String(v) : '';
 }
 
 function sellingFromRow(p: InventoryProductRow): string {
   const v = p.selling_price ?? p.sell_price;
-  return v != null && v !== '' ? String(v) : '';
+  return v != null && !Number.isNaN(Number(v)) ? String(v) : '';
 }
 
 export default function AddProductModal({ onClose, onSaved, product }: Props) {
