@@ -1,32 +1,27 @@
 # تشخيص حفظ المخزون (Inventory)
 
-## أعمدة الجدول المتوقعة (من `supabase/002_inventory.sql`)
+## أعمدة الجدول الحالية (كما في قاعدة البيانات الفعلية)
 
-- `name_ar` (نص)
-- `cost_price` — سعر الشراء (ليس `purchase_price` إلا إذا أضفت عموداً يدوياً)
-- `sell_price` — سعر البيع (ليس `selling_price`)
+- `name_ar`
+- `purchase_price` — سعر الشراء
+- `selling_price` — سعر البيع
 - `quantity`
-- `category` — يجب أن تكون واحدة من: `natural` | `artificial` | `soil_supplies` | `other` (ليس النص العربي «أخرى»)
+- `category` — يجب أن تكون واحدة من: `natural` | `artificial` | `soil_supplies` | `other`
 
-## اختبار من Console في المتصفح (بعد فتح لوحة التحكم)
+(قد توجد أعمدة قديمة مثل `cost_price` / `sell_price` في جداول قديمة؛ التطبيق يعرض `selling_price` مع fallback لـ `sell_price`.)
 
-تأكد أنك مسجّل الدخول، ثم:
+## اختبار من Console في المتصفح
 
 ```js
-const { data: { session } } = await supabase.auth.getSession();
-console.log('session', session);
-
 const { data, error } = await supabase.from('inventory').insert({
   name_ar: 'test',
   quantity: 1,
-  sell_price: 10,
-  cost_price: 5,
+  selling_price: 10,
+  purchase_price: 5,
   category: 'other',
 });
-console.log('insert result', data, error);
+console.log(data, error);
 ```
-
-> `supabase` متاح فقط إذا عرّفته في الـwindow أو استوردته من وحدة — في Vite عادة تستخدم نفس الاستيراد من `src/lib/supabase` داخل التطبيق؛ للاختبار السريع انسخ الاستيراد من ملف مؤقت أو استخدم تبويب Sources.
 
 ## سياسات RLS
 

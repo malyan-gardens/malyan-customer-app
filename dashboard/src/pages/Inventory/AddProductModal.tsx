@@ -34,10 +34,10 @@ const labelStyle: React.CSSProperties = {
 };
 
 export default function AddProductModal({ onClose, onSaved }: Props) {
-  const [form, setForm] = useState({
+  const [formData, setFormData] = useState({
     name_ar: '',
     purchase_price: '',
-    sell_price: '',
+    selling_price: '',
     quantity: '',
     category: 'other',
   });
@@ -61,12 +61,12 @@ export default function AddProductModal({ onClose, onSaved }: Props) {
     setError(null);
     try {
       const row = {
-        name_ar: form.name_ar.trim() || 'test',
+        name_ar: formData.name_ar.trim() || 'test',
         // يجب أن تكون واحدة من: natural | artificial | soil_supplies | other (ليس النص العربي)
-        category: form.category || 'other',
-        cost_price: Number(form.purchase_price) || 0,
-        sell_price: Number(form.sell_price) || 0,
-        quantity: Number(form.quantity) || 0,
+        category: formData.category || 'other',
+        purchase_price: Number(formData.purchase_price) || 0,
+        selling_price: Number(formData.selling_price) || 0,
+        quantity: Number(formData.quantity) || 0,
         image_url: null as string | null,
       };
 
@@ -140,8 +140,8 @@ export default function AddProductModal({ onClose, onSaved }: Props) {
           <input
             type="text"
             placeholder="مثال: نخلة صناعية 160 سم"
-            value={form.name_ar}
-            onChange={(e) => setForm((f) => ({ ...f, name_ar: e.target.value }))}
+            value={formData.name_ar}
+            onChange={(e) => setFormData((f) => ({ ...f, name_ar: e.target.value }))}
             style={inputStyle}
           />
         </div>
@@ -191,8 +191,8 @@ export default function AddProductModal({ onClose, onSaved }: Props) {
               min={0}
               step={0.01}
               placeholder="0"
-              value={form.purchase_price}
-              onChange={(e) => setForm((f) => ({ ...f, purchase_price: e.target.value }))}
+              value={formData.purchase_price}
+              onChange={(e) => setFormData((f) => ({ ...f, purchase_price: e.target.value }))}
               style={inputStyle}
             />
           </div>
@@ -203,8 +203,8 @@ export default function AddProductModal({ onClose, onSaved }: Props) {
               min={0}
               step={0.01}
               placeholder="0"
-              value={form.sell_price}
-              onChange={(e) => setForm((f) => ({ ...f, sell_price: e.target.value }))}
+              value={formData.selling_price}
+              onChange={(e) => setFormData((f) => ({ ...f, selling_price: e.target.value }))}
               style={inputStyle}
             />
           </div>
@@ -216,16 +216,16 @@ export default function AddProductModal({ onClose, onSaved }: Props) {
             <input
               type="number"
               min={0}
-              value={form.quantity}
-              onChange={(e) => setForm((f) => ({ ...f, quantity: e.target.value }))}
+              value={formData.quantity}
+              onChange={(e) => setFormData((f) => ({ ...f, quantity: e.target.value }))}
               style={inputStyle}
             />
           </div>
           <div>
             <label style={labelStyle}>الفئة</label>
             <select
-              value={form.category}
-              onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
+              value={formData.category}
+              onChange={(e) => setFormData((f) => ({ ...f, category: e.target.value }))}
               style={inputStyle}
             >
               {CATEGORIES.map((c) => (
