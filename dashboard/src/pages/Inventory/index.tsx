@@ -11,8 +11,6 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 const boxStyle = { background: '#0f1a12', border: '1px solid #2a3d2e', borderRadius: 14 };
 
-const FETCH_TIMEOUT_MS = 5000;
-
 const iconBtnStyle: React.CSSProperties = {
   border: '1px solid #2a3d2e',
   background: '#162019',
@@ -29,58 +27,26 @@ export default function Inventory() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<InventoryProductRow | null>(null);
-  const [fetchWarning, setFetchWarning] = useState<string | null>(null);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   async function fetchProducts() {
     setLoading(true);
-    setFetchWarning(null);
+    setFetchError(null);
 
     try {
-      const url = import.meta.env.VITE_SUPABASE_URL;
-      const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
-      let urlHost = '—';
-      try {
-        if (url) urlHost = new URL(url).host;
-      } catch {
-        urlHost = 'invalid';
-      }
-      console.log('[inventory] fetch — env check', {
-        viteUrlHost: urlHost,
-        viteKeySet: Boolean(key && String(key).length > 20),
-      });
-
-      const queryPromise = supabase
+      console.log('[inventory] supabase client ready:', Boolean(supabase));
+      const result = await supabase
         .from('inventory')
         .select('*')
         .order('created_at', { ascending: false });
 
-      const timeoutPromise = new Promise<{ __timedOut: true }>((resolve) =>
-        setTimeout(() => resolve({ __timedOut: true }), FETCH_TIMEOUT_MS)
-      );
-
-      const outcome = await Promise.race([queryPromise, timeoutPromise]);
-
-      if (outcome && '__timedOut' in outcome && outcome.__timedOut) {
-        console.warn(
-          `[inventory] fetch timed out after ${FETCH_TIMEOUT_MS}ms — showing empty state (check RLS / network / Supabase project)`
-        );
-        setProducts([]);
-        setFetchWarning(
-          'انتهت مهلة تحميل المخزون. قد تكون صلاحيات القراءة على جدول inventory غير مفعّلة للمفتاح anon (RLS).'
-        );
-        return;
-      }
-
-      const { data, error } = outcome as {
-        data: InventoryProductRow[] | null;
-        error: { message: string; code?: string } | null;
-      };
-      console.log('[inventory] fetch result', { data, error, rowCount: data?.length ?? 0 });
+      const { data, error } = result;
+      console.log('[inventory] full fetch result', result);
 
       if (error) {
         console.error('[inventory] fetch error detail', error);
         setProducts([]);
-        setFetchWarning(error.message || 'فشل جلب المخزون (تحقق من RLS والمفتاح anon)');
+        setFetchError(`فشل جلب المخزون: ${error.message}`);
         return;
       }
 
@@ -88,7 +54,7 @@ export default function Inventory() {
     } catch (e) {
       console.error('[inventory] fetch exception', e);
       setProducts([]);
-      setFetchWarning(e instanceof Error ? e.message : 'خطأ غير متوقع أثناء جلب المخزون');
+      setFetchError(`فشل جلب المخزون: ${e instanceof Error ? e.message : 'خطأ غير متوقع'}`);
     } finally {
       setLoading(false);
     }
@@ -167,7 +133,7 @@ export default function Inventory() {
 
       {!loading && products.length === 0 && (
         <div style={{ ...boxStyle, padding: 60, textAlign: 'center', color: '#4a6450' }}>
-          {fetchWarning && (
+          {fetchError && (
             <div
               style={{
                 background: 'rgba(224,82,82,0.12)',
@@ -181,7 +147,7 @@ export default function Inventory() {
                 whiteSpace: 'pre-line',
               }}
             >
-              {fetchWarning}
+              {fetchError}
             </div>
           )}
           <div style={{ fontSize: 48, marginBottom: 16 }}>📭</div>

@@ -76,7 +76,6 @@ export default function AddProductModal({ onClose, onSaved, product }: Props) {
   const [existingImageUrl, setExistingImageUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [warning, setWarning] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -131,35 +130,27 @@ export default function AddProductModal({ onClose, onSaved, product }: Props) {
       console.log('[inventory] upload skipped: no new file selected');
       return existingImageUrl;
     }
-    console.log('[inventory] upload start', {
-      bucket: 'inventory-images',
-      fileName: imageFile.name,
-      fileSize: imageFile.size,
-      mimeType: imageFile.type,
-    });
-    const ext = imageFile.name.split('.').pop() || 'jpg';
-    const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-    const uploadPromise = supabase.storage
+    console.log('[inventory] upload start', { bucket: 'inventory-images', fileName: imageFile.name });
+
+    let imageUrl: string | null = null;
+    const fileName = `${Date.now()}-${imageFile.name}`;
+    const { data: uploadData, error: uploadError } = await supabase.storage
       .from('inventory-images')
-      .upload(path, imageFile, { upsert: true, cacheControl: '3600' });
-    const timeoutPromise = new Promise<{ error: { message: string } }>((resolve) =>
-      setTimeout(() => {
-        console.warn('[inventory] upload timeout after 8s');
-        resolve({ error: { message: 'انتهت مهلة رفع الصورة (8 ثوانٍ)' } });
-      }, 8000)
-    );
-    const uploadResult = (await Promise.race([uploadPromise, timeoutPromise])) as {
-      error: { message?: string } | null;
-    };
-    const uploadErr = uploadResult.error;
-    if (uploadErr) {
-      console.error('[inventory] storage upload failed', uploadErr);
-      throw new Error(uploadErr.message || 'فشل رفع الصورة');
+      .upload(fileName, imageFile, { upsert: true });
+
+    console.log('[inventory] upload result', { uploadData, uploadError });
+
+    if (!uploadError && uploadData) {
+      const { data: urlData } = supabase.storage
+        .from('inventory-images')
+        .getPublicUrl(uploadData.path);
+      imageUrl = urlData.publicUrl;
+      console.log('[inventory] public url', imageUrl);
+    } else {
+      console.warn('[inventory] upload failed, continuing without image');
     }
-    console.log('[inventory] upload success', { bucket: 'inventory-images', path });
-    const { data: urlData } = supabase.storage.from('inventory-images').getPublicUrl(path);
-    console.log('[inventory] public URL generated', { publicUrl: urlData.publicUrl });
-    return urlData.publicUrl ?? null;
+
+    return imageUrl ?? existingImageUrl;
   }
 
   const handleSave = async () => {
@@ -170,18 +161,10 @@ export default function AddProductModal({ onClose, onSaved, product }: Props) {
 
     setSaving(true);
     setError(null);
-    setWarning(null);
     try {
       let imageUrl: string | null = existingImageUrl;
       if (imageFile) {
-        try {
-          imageUrl = await uploadImageIfNeeded();
-        } catch (uploadError: unknown) {
-          const uploadMsg = uploadError instanceof Error ? uploadError.message : 'فشل رفع الصورة';
-          console.warn('[inventory] continue saving without image', uploadMsg);
-          setWarning(`تم الحفظ بدون صورة\n(${uploadMsg})`);
-          imageUrl = existingImageUrl;
-        }
+        imageUrl = await uploadImageIfNeeded();
       }
 
       const row = {
@@ -259,22 +242,6 @@ export default function AddProductModal({ onClose, onSaved, product }: Props) {
             }}
           >
             {error}
-          </div>
-        )}
-        {warning && !error && (
-          <div
-            style={{
-              background: 'rgba(245,166,35,0.12)',
-              border: '1px solid rgba(245,166,35,0.35)',
-              borderRadius: 8,
-              padding: 10,
-              color: '#f5a623',
-              fontSize: 13,
-              marginBottom: 16,
-              whiteSpace: 'pre-line',
-            }}
-          >
-            {warning}
           </div>
         )}
 
