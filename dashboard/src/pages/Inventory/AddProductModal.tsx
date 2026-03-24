@@ -144,9 +144,9 @@ export default function AddProductModal({ onClose, onSaved, product }: Props) {
       .upload(path, imageFile, { upsert: true, cacheControl: '3600' });
     const timeoutPromise = new Promise<{ error: { message: string } }>((resolve) =>
       setTimeout(() => {
-        console.warn('[inventory] upload timeout after 10s');
-        resolve({ error: { message: 'انتهت مهلة رفع الصورة (10 ثوانٍ)' } });
-      }, 10000)
+        console.warn('[inventory] upload timeout after 8s');
+        resolve({ error: { message: 'انتهت مهلة رفع الصورة (8 ثوانٍ)' } });
+      }, 8000)
     );
     const uploadResult = (await Promise.race([uploadPromise, timeoutPromise])) as {
       error: { message?: string } | null;
@@ -179,7 +179,7 @@ export default function AddProductModal({ onClose, onSaved, product }: Props) {
         } catch (uploadError: unknown) {
           const uploadMsg = uploadError instanceof Error ? uploadError.message : 'فشل رفع الصورة';
           console.warn('[inventory] continue saving without image', uploadMsg);
-          setWarning(`تعذر رفع الصورة: ${uploadMsg}\nسيتم حفظ المنتج بدون صورة.`);
+          setWarning(`تم الحفظ بدون صورة\n(${uploadMsg})`);
           imageUrl = existingImageUrl;
         }
       }

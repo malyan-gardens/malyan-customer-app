@@ -10,7 +10,16 @@ export function useAuth() {
   useEffect(() => {
     let cancelled = false;
 
-    // 1) دائماً: التحقق من الجلسة المحفوظة أولاً قبل أي توجيه
+    // 1) كل تحميل صفحة: افحص وجود جلسة محفوظة في localStorage
+    try {
+      const storageKeys = Object.keys(localStorage);
+      const hasStoredSession = storageKeys.some((k) => k.includes('auth-token'));
+      console.log('[auth] localStorage session key exists:', hasStoredSession);
+    } catch {
+      // ignore storage errors
+    }
+
+    // 2) دائماً: التحقق من الجلسة الفعلية من Supabase قبل أي توجيه
     supabase.auth
       .getSession()
       .then(async ({ data: { session } }) => {
@@ -36,7 +45,7 @@ export function useAuth() {
         if (!cancelled) setLoading(false);
       });
 
-    // 2) الاستماع لتغييرات الجلسة (تسجيل دخول/خروج، Magic Link، إلخ)
+    // 3) الاستماع لتغييرات الجلسة (تسجيل دخول/خروج، Magic Link، إلخ)
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (_event, session) => {
@@ -64,45 +73,6 @@ export function useAuth() {
   }, []);
 
   const signOut = () => supabase.auth.signOut();
-
-  // تسجيل خروج تلقائي بعد 24 ساعة خمول
-  useEffect(() => {
-    if (!user) return;
-
-    const inactivityMs = 24 * 60 * 60 * 1000;
-    const storageKey = 'malyan_lastActivity';
-    let signedOut = false;
-
-    const markActivity = () => {
-      try {
-        localStorage.setItem(storageKey, String(Date.now()));
-      } catch {
-        // ignore
-      }
-    };
-
-    markActivity();
-
-    const events: Array<keyof WindowEventMap> = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'click'];
-    events.forEach((ev) => window.addEventListener(ev, markActivity));
-
-    const intervalId = window.setInterval(() => {
-      try {
-        const last = Number(localStorage.getItem(storageKey) || '0');
-        if (!signedOut && last > 0 && Date.now() - last > inactivityMs) {
-          signedOut = true;
-          signOut();
-        }
-      } catch {
-        // ignore
-      }
-    }, 60 * 1000);
-
-    return () => {
-      events.forEach((ev) => window.removeEventListener(ev, markActivity));
-      clearInterval(intervalId);
-    };
-  }, [user]);
 
   return { user, role, loading, signOut };
 }
