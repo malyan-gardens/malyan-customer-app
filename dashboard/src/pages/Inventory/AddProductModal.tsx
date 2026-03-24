@@ -76,6 +76,7 @@ export default function AddProductModal({ onClose, onSaved, product }: Props) {
   const [existingImageUrl, setExistingImageUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -127,18 +128,37 @@ export default function AddProductModal({ onClose, onSaved, product }: Props) {
 
   async function uploadImageIfNeeded(): Promise<string | null> {
     if (!imageFile) {
+      console.log('[inventory] upload skipped: no new file selected');
       return existingImageUrl;
     }
+    console.log('[inventory] upload start', {
+      bucket: 'inventory-images',
+      fileName: imageFile.name,
+      fileSize: imageFile.size,
+      mimeType: imageFile.type,
+    });
     const ext = imageFile.name.split('.').pop() || 'jpg';
     const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-    const { error: uploadErr } = await supabase.storage
+    const uploadPromise = supabase.storage
       .from('inventory-images')
       .upload(path, imageFile, { upsert: true, cacheControl: '3600' });
+    const timeoutPromise = new Promise<{ error: { message: string } }>((resolve) =>
+      setTimeout(() => {
+        console.warn('[inventory] upload timeout after 10s');
+        resolve({ error: { message: 'انتهت مهلة رفع الصورة (10 ثوانٍ)' } });
+      }, 10000)
+    );
+    const uploadResult = (await Promise.race([uploadPromise, timeoutPromise])) as {
+      error: { message?: string } | null;
+    };
+    const uploadErr = uploadResult.error;
     if (uploadErr) {
-      console.error('[inventory] storage upload', uploadErr);
+      console.error('[inventory] storage upload failed', uploadErr);
       throw new Error(uploadErr.message || 'فشل رفع الصورة');
     }
+    console.log('[inventory] upload success', { bucket: 'inventory-images', path });
     const { data: urlData } = supabase.storage.from('inventory-images').getPublicUrl(path);
+    console.log('[inventory] public URL generated', { publicUrl: urlData.publicUrl });
     return urlData.publicUrl ?? null;
   }
 
@@ -150,10 +170,18 @@ export default function AddProductModal({ onClose, onSaved, product }: Props) {
 
     setSaving(true);
     setError(null);
+    setWarning(null);
     try {
       let imageUrl: string | null = existingImageUrl;
       if (imageFile) {
-        imageUrl = await uploadImageIfNeeded();
+        try {
+          imageUrl = await uploadImageIfNeeded();
+        } catch (uploadError: unknown) {
+          const uploadMsg = uploadError instanceof Error ? uploadError.message : 'فشل رفع الصورة';
+          console.warn('[inventory] continue saving without image', uploadMsg);
+          setWarning(`تعذر رفع الصورة: ${uploadMsg}\nسيتم حفظ المنتج بدون صورة.`);
+          imageUrl = existingImageUrl;
+        }
       }
 
       const row = {
@@ -166,9 +194,11 @@ export default function AddProductModal({ onClose, onSaved, product }: Props) {
       };
 
       if (isEdit && product) {
+        console.log('[inventory] update product', { id: product.id, row });
         const { error: upErr } = await supabase.from('inventory').update(row).eq('id', product.id);
         if (upErr) throw upErr;
       } else {
+        console.log('[inventory] insert product', row);
         const { error: insErr } = await supabase.from('inventory').insert([row]);
         if (insErr) throw insErr;
       }
@@ -229,6 +259,22 @@ export default function AddProductModal({ onClose, onSaved, product }: Props) {
             }}
           >
             {error}
+          </div>
+        )}
+        {warning && !error && (
+          <div
+            style={{
+              background: 'rgba(245,166,35,0.12)',
+              border: '1px solid rgba(245,166,35,0.35)',
+              borderRadius: 8,
+              padding: 10,
+              color: '#f5a623',
+              fontSize: 13,
+              marginBottom: 16,
+              whiteSpace: 'pre-line',
+            }}
+          >
+            {warning}
           </div>
         )}
 
