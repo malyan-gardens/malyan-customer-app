@@ -1,7 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { Image, Pressable, ScrollView, Text, View } from "react-native";
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { colors } from "../../lib/theme";
 import { cartTotal, useCartStore } from "../../store/cartStore";
 
 export default function CartScreen() {
@@ -13,73 +14,77 @@ export default function CartScreen() {
   const total = cartTotal(items);
 
   return (
-    <SafeAreaView className="flex-1 bg-black" edges={["bottom"]}>
-      <ScrollView className="flex-1 px-4" contentContainerStyle={{ paddingBottom: 120 }}>
+    <SafeAreaView style={styles.screen} edges={["bottom"]}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+      >
         {items.length === 0 ? (
-          <View className="items-center justify-center py-20">
+          <View style={styles.emptyWrap}>
             <Ionicons name="cart-outline" size={64} color="#374151" />
-            <Text className="text-neutral-500 mt-6 text-lg text-center">
-              السلة فارغة
-            </Text>
-            <Text className="text-neutral-600 mt-2 text-center px-8">
+            <Text style={styles.emptyTitle}>السلة فارغة</Text>
+            <Text style={styles.emptySub}>
               تصفح المتجر وأضف منتجاتك المفضلة
             </Text>
             <Pressable
               onPress={() => router.push("/(tabs)/home")}
-              className="mt-8 bg-brand px-8 py-3 rounded-xl"
+              style={styles.primaryBtn}
             >
-              <Text className="text-white font-bold">تصفح المنتجات</Text>
+              <Text style={styles.primaryBtnText}>تصفح المنتجات</Text>
             </Pressable>
           </View>
         ) : (
           items.map((line) => {
             const title = line.nameAr ?? line.name;
             return (
-              <View
-                key={line.productId}
-                className="flex-row bg-neutral-900 rounded-2xl border border-neutral-800 mb-3 overflow-hidden"
-              >
-                <View className="w-24 h-24 bg-neutral-800">
+              <View key={line.productId} style={styles.lineRow}>
+                <View style={styles.thumb}>
                   {line.imageUrl ? (
                     <Image
                       source={{ uri: line.imageUrl }}
-                      className="w-full h-full"
+                      style={styles.thumbImage}
                       resizeMode="cover"
                     />
                   ) : (
-                    <View className="flex-1 items-center justify-center">
-                      <Ionicons name="leaf" size={32} color="#1a7a3c" />
+                    <View style={styles.thumbPlaceholder}>
+                      <Ionicons name="leaf" size={32} color={colors.brand} />
                     </View>
                   )}
                 </View>
-                <View className="flex-1 p-3 justify-between">
-                  <Text className="text-white font-semibold text-right" numberOfLines={2}>
+                <View style={styles.lineBody}>
+                  <Text style={styles.lineTitle} numberOfLines={2}>
                     {title}
                   </Text>
-                  <Text className="text-brand text-right font-bold">
+                  <Text style={styles.linePrice}>
                     {(line.price * line.quantity).toFixed(2)} {line.currency}
                   </Text>
-                  <View className="flex-row items-center justify-end gap-2 mt-2">
+                  <View style={styles.qtyRow}>
                     <Pressable
-                      onPress={() => setQuantity(line.productId, line.quantity - 1)}
-                      className="w-9 h-9 rounded-lg bg-neutral-800 items-center justify-center border border-neutral-700"
+                      onPress={() =>
+                        setQuantity(line.productId, line.quantity - 1)
+                      }
+                      style={styles.qtyBtn}
                     >
                       <Ionicons name="remove" size={18} color="#fff" />
                     </Pressable>
-                    <Text className="text-white font-bold min-w-[28px] text-center">
-                      {line.quantity}
-                    </Text>
+                    <Text style={styles.qtyText}>{line.quantity}</Text>
                     <Pressable
-                      onPress={() => setQuantity(line.productId, line.quantity + 1)}
-                      className="w-9 h-9 rounded-lg bg-brand items-center justify-center"
+                      onPress={() =>
+                        setQuantity(line.productId, line.quantity + 1)
+                      }
+                      style={styles.qtyBtnBrand}
                     >
                       <Ionicons name="add" size={18} color="#fff" />
                     </Pressable>
                     <Pressable
                       onPress={() => removeItem(line.productId)}
-                      className="ml-2 p-2"
+                      style={styles.trashBtn}
                     >
-                      <Ionicons name="trash-outline" size={20} color="#ef4444" />
+                      <Ionicons
+                        name="trash-outline"
+                        size={20}
+                        color={colors.red500}
+                      />
                     </Pressable>
                   </View>
                 </View>
@@ -90,21 +95,148 @@ export default function CartScreen() {
       </ScrollView>
 
       {items.length > 0 && (
-        <View className="absolute bottom-0 left-0 right-0 bg-black border-t border-brand/40 px-4 pt-3 pb-6">
-          <View className="flex-row justify-between items-center mb-4">
-            <Text className="text-neutral-400">الإجمالي</Text>
-            <Text className="text-white text-xl font-bold">
+        <View style={styles.footer}>
+          <View style={styles.totalRow}>
+            <Text style={styles.totalLabel}>الإجمالي</Text>
+            <Text style={styles.totalValue}>
               {total.toFixed(2)} QAR
             </Text>
           </View>
-          <Pressable className="bg-brand py-4 rounded-2xl items-center active:opacity-90">
-            <Text className="text-white font-bold text-lg">إتمام الطلب</Text>
+          <Pressable style={styles.checkoutBtn}>
+            <Text style={styles.checkoutText}>إتمام الطلب</Text>
           </Pressable>
-          <Pressable onPress={clear} className="mt-3 py-2 items-center">
-            <Text className="text-neutral-500 text-sm">مسح السلة</Text>
+          <Pressable onPress={clear} style={styles.clearBtn}>
+            <Text style={styles.clearText}>مسح السلة</Text>
           </Pressable>
         </View>
       )}
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.bg },
+  scroll: { flex: 1 },
+  scrollContent: { paddingHorizontal: 16, paddingBottom: 120 },
+  emptyWrap: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 80,
+  },
+  emptyTitle: {
+    color: colors.neutral500,
+    marginTop: 24,
+    fontSize: 18,
+    textAlign: "center",
+  },
+  emptySub: {
+    color: colors.neutral600,
+    marginTop: 8,
+    textAlign: "center",
+    paddingHorizontal: 32,
+  },
+  primaryBtn: {
+    marginTop: 32,
+    backgroundColor: colors.brand,
+    paddingHorizontal: 32,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  primaryBtnText: { color: colors.white, fontWeight: "700" },
+  lineRow: {
+    flexDirection: "row",
+    backgroundColor: colors.neutral900,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.neutral800,
+    marginBottom: 12,
+    overflow: "hidden",
+  },
+  thumb: {
+    width: 96,
+    height: 96,
+    backgroundColor: colors.neutral800,
+  },
+  thumbImage: { width: "100%", height: "100%" },
+  thumbPlaceholder: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  lineBody: {
+    flex: 1,
+    padding: 12,
+    justifyContent: "space-between",
+  },
+  lineTitle: {
+    color: colors.white,
+    fontWeight: "600",
+    textAlign: "right",
+  },
+  linePrice: {
+    color: colors.brand,
+    textAlign: "right",
+    fontWeight: "700",
+  },
+  qtyRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    marginTop: 8,
+    gap: 8,
+  },
+  qtyBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: colors.neutral800,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: colors.neutral700,
+  },
+  qtyBtnBrand: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: colors.brand,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  qtyText: {
+    color: colors.white,
+    fontWeight: "700",
+    minWidth: 28,
+    textAlign: "center",
+  },
+  trashBtn: { marginLeft: 8, padding: 8 },
+  footer: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: colors.bg,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderBrandMuted,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 24,
+  },
+  totalRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  totalLabel: { color: colors.neutral400 },
+  totalValue: { color: colors.white, fontSize: 20, fontWeight: "700" },
+  checkoutBtn: {
+    backgroundColor: colors.brand,
+    paddingVertical: 16,
+    borderRadius: 16,
+    alignItems: "center",
+  },
+  checkoutText: { color: colors.white, fontWeight: "700", fontSize: 18 },
+  clearBtn: { marginTop: 12, paddingVertical: 8, alignItems: "center" },
+  clearText: { color: colors.neutral500, fontSize: 14 },
+});

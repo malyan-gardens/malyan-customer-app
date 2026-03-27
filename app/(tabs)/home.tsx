@@ -8,11 +8,13 @@ import {
   Pressable,
   RefreshControl,
   ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { colors } from "../../lib/theme";
 import type { InventoryRow } from "../../lib/types";
 import { supabase } from "../../lib/supabase";
 
@@ -73,31 +75,26 @@ export default function HomeScreen() {
       return (
         <Pressable
           onPress={() => router.push(`/product/${item.id}`)}
-          className="m-2 flex-1 min-w-[44%] max-w-[50%] rounded-2xl overflow-hidden bg-neutral-900 border border-neutral-800 active:opacity-90"
+          style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
         >
-          <View className="aspect-square bg-neutral-800">
+          <View style={styles.cardImageWrap}>
             {item.image_url ? (
               <Image
                 source={{ uri: item.image_url }}
-                className="w-full h-full"
+                style={styles.cardImage}
                 resizeMode="cover"
               />
             ) : (
-              <View className="flex-1 items-center justify-center">
-                <Ionicons name="leaf-outline" size={48} color="#1a7a3c" />
+              <View style={styles.cardImagePlaceholder}>
+                <Ionicons name="leaf-outline" size={48} color={colors.brand} />
               </View>
             )}
           </View>
-          <View className="p-3">
-            <Text
-              className="text-white font-semibold text-base text-right"
-              numberOfLines={2}
-            >
+          <View style={styles.cardBody}>
+            <Text style={styles.cardTitle} numberOfLines={2}>
               {title}
             </Text>
-            <Text className="text-brand mt-1 font-bold text-right">
-              {priceLabel}
-            </Text>
+            <Text style={styles.cardPrice}>{priceLabel}</Text>
           </View>
         </Pressable>
       );
@@ -107,41 +104,36 @@ export default function HomeScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView className="flex-1 bg-black items-center justify-center" edges={["bottom"]}>
-        <ActivityIndicator size="large" color="#1a7a3c" />
-        <Text className="text-neutral-400 mt-4">جاري التحميل…</Text>
+      <SafeAreaView style={styles.centered} edges={["bottom"]}>
+        <ActivityIndicator size="large" color={colors.brand} />
+        <Text style={styles.loadingText}>جاري التحميل…</Text>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-black" edges={["bottom"]}>
-      <View className="px-4 pt-2 pb-3 border-b border-neutral-900">
-        <Text className="text-white text-2xl font-bold text-right mb-1">
-          ماليان للتجارة والحدائق
-        </Text>
-        <Text className="text-neutral-500 text-sm text-right mb-4">
-          نباتات اصطناعية فاخرة في قطر
-        </Text>
-        <View className="flex-row items-center bg-neutral-900 rounded-xl px-3 py-2 border border-neutral-800">
-          <Ionicons name="search" size={20} color="#6b7280" />
+    <SafeAreaView style={styles.screen} edges={["bottom"]}>
+      <View style={styles.header}>
+        <Text style={styles.title}>ماليان للتجارة والحدائق</Text>
+        <Text style={styles.subtitle}>نباتات اصطناعية فاخرة في قطر</Text>
+        <View style={styles.searchRow}>
+          <Ionicons name="search" size={20} color={colors.neutral500} />
           <TextInput
             value={search}
             onChangeText={setSearch}
             placeholder="بحث عن منتج…"
-            placeholderTextColor="#6b7280"
-            className="flex-1 text-white text-right py-2 px-2 text-base"
-            style={{ writingDirection: "rtl" }}
+            placeholderTextColor={colors.neutral500}
+            style={[styles.searchInput, { writingDirection: "rtl" }]}
           />
         </View>
       </View>
 
       {categories.length > 0 && (
-        <View className="border-b border-neutral-900 py-3">
+        <View style={styles.categoryBar}>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}
+            contentContainerStyle={styles.categoryScroll}
           >
             {[null, ...categories].map((cat) => {
               const selected =
@@ -152,16 +144,16 @@ export default function HomeScreen() {
                 <Pressable
                   key={cat === null ? "__all__" : cat}
                   onPress={() => setCategory(cat)}
-                  className={`px-4 py-2 rounded-full border ${
-                    selected
-                      ? "bg-brand border-brand"
-                      : "bg-neutral-900 border-neutral-700"
-                  }`}
+                  style={[
+                    styles.chip,
+                    selected ? styles.chipSelected : styles.chipIdle,
+                  ]}
                 >
                   <Text
-                    className={`font-semibold ${
-                      selected ? "text-white" : "text-neutral-300"
-                    }`}
+                    style={[
+                      styles.chipText,
+                      selected ? styles.chipTextSelected : styles.chipTextIdle,
+                    ]}
                   >
                     {label}
                   </Text>
@@ -173,20 +165,20 @@ export default function HomeScreen() {
       )}
 
       {error ? (
-        <View className="flex-1 items-center justify-center px-6">
-          <Ionicons name="cloud-offline-outline" size={48} color="#6b7280" />
-          <Text className="text-neutral-400 text-center mt-4 text-right">
+        <View style={styles.errorBox}>
+          <Ionicons name="cloud-offline-outline" size={48} color={colors.neutral500} />
+          <Text style={styles.errorMsg}>
             تعذر تحميل المنتجات. تأكد من جدول inventory في Supabase والصلاحيات.
           </Text>
-          <Text className="text-red-400/80 text-sm mt-2 text-center">{error}</Text>
+          <Text style={styles.errorDetail}>{error}</Text>
           <Pressable
             onPress={() => {
               setLoading(true);
               load();
             }}
-            className="mt-6 bg-brand px-6 py-3 rounded-xl"
+            style={styles.retryBtn}
           >
-            <Text className="text-white font-semibold">إعادة المحاولة</Text>
+            <Text style={styles.retryBtnText}>إعادة المحاولة</Text>
           </Pressable>
         </View>
       ) : (
@@ -194,8 +186,8 @@ export default function HomeScreen() {
           data={filtered}
           keyExtractor={(item) => item.id}
           numColumns={2}
-          columnWrapperStyle={{ paddingHorizontal: 8 }}
-          contentContainerStyle={{ paddingBottom: 24 }}
+          columnWrapperStyle={styles.columnWrap}
+          contentContainerStyle={styles.listContent}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -203,12 +195,12 @@ export default function HomeScreen() {
                 setRefreshing(true);
                 load();
               }}
-              tintColor="#1a7a3c"
+              tintColor={colors.brand}
             />
           }
           ListEmptyComponent={
-            <View className="py-16 items-center px-6">
-              <Text className="text-neutral-500 text-center">
+            <View style={styles.emptyBox}>
+              <Text style={styles.emptyText}>
                 لا توجد منتجات مطابقة للبحث أو الفئة.
               </Text>
             </View>
@@ -219,3 +211,138 @@ export default function HomeScreen() {
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.bg },
+  centered: {
+    flex: 1,
+    backgroundColor: colors.bg,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  loadingText: { color: colors.neutral400, marginTop: 16 },
+  header: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.neutral900,
+  },
+  title: {
+    color: colors.white,
+    fontSize: 24,
+    fontWeight: "700",
+    textAlign: "right",
+    marginBottom: 4,
+  },
+  subtitle: {
+    color: colors.neutral500,
+    fontSize: 14,
+    textAlign: "right",
+    marginBottom: 16,
+  },
+  searchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.neutral900,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: colors.neutral800,
+  },
+  searchInput: {
+    flex: 1,
+    color: colors.white,
+    textAlign: "right",
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    fontSize: 16,
+  },
+  categoryBar: {
+    borderBottomWidth: 1,
+    borderBottomColor: colors.neutral900,
+    paddingVertical: 12,
+  },
+  categoryScroll: { paddingHorizontal: 16, gap: 8, flexDirection: "row" },
+  chip: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  chipSelected: {
+    backgroundColor: colors.brand,
+    borderColor: colors.brand,
+  },
+  chipIdle: {
+    backgroundColor: colors.neutral900,
+    borderColor: colors.neutral700,
+  },
+  chipText: { fontWeight: "600" },
+  chipTextSelected: { color: colors.white },
+  chipTextIdle: { color: colors.neutral300 },
+  errorBox: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+  },
+  errorMsg: {
+    color: colors.neutral400,
+    textAlign: "center",
+    marginTop: 16,
+  },
+  errorDetail: {
+    color: colors.red400,
+    fontSize: 12,
+    marginTop: 8,
+    textAlign: "center",
+  },
+  retryBtn: {
+    marginTop: 24,
+    backgroundColor: colors.brand,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  retryBtnText: { color: colors.white, fontWeight: "600" },
+  listContent: { paddingBottom: 24 },
+  columnWrap: { paddingHorizontal: 8 },
+  card: {
+    flex: 1,
+    maxWidth: "50%",
+    margin: 8,
+    borderRadius: 16,
+    overflow: "hidden",
+    backgroundColor: colors.neutral900,
+    borderWidth: 1,
+    borderColor: colors.neutral800,
+  },
+  cardPressed: { opacity: 0.9 },
+  cardImageWrap: {
+    aspectRatio: 1,
+    backgroundColor: colors.neutral800,
+  },
+  cardImage: { width: "100%", height: "100%" },
+  cardImagePlaceholder: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cardBody: { padding: 12 },
+  cardTitle: {
+    color: colors.white,
+    fontWeight: "600",
+    fontSize: 16,
+    textAlign: "right",
+  },
+  cardPrice: {
+    color: colors.brand,
+    marginTop: 4,
+    fontWeight: "700",
+    textAlign: "right",
+  },
+  emptyBox: { paddingVertical: 64, alignItems: "center", paddingHorizontal: 24 },
+  emptyText: { color: colors.neutral500, textAlign: "center" },
+});

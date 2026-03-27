@@ -1,0 +1,16 @@
+export const colors = {
+  bg: "#000000",
+  brand: "#1a7a3c",
+  neutral900: "#171717",
+  neutral800: "#262626",
+  neutral700: "#404040",
+  neutral600: "#525252",
+  neutral500: "#737373",
+  neutral400: "#a3a3a3",
+  neutral300: "#d4d4d4",
+  red400: "#f87171",
+  red500: "#ef4444",
+  white: "#ffffff",
+  borderBrandMuted: "rgba(26, 122, 60, 0.4)",
+  brandMutedBg: "rgba(26, 122, 60, 0.2)",
+} as const;

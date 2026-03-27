@@ -1,24 +1,21 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Linking, Pressable, Text, View } from "react-native";
+import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { colors } from "../../lib/theme";
 
 export default function ProfileScreen() {
   return (
-    <SafeAreaView className="flex-1 bg-black" edges={["bottom"]}>
-      <View className="px-6 pt-4">
-        <View className="items-center mb-10">
-          <View className="w-24 h-24 rounded-full bg-brand/20 border-2 border-brand items-center justify-center mb-4">
-            <Ionicons name="business" size={44} color="#1a7a3c" />
+    <SafeAreaView style={styles.screen} edges={["bottom"]}>
+      <View style={styles.pad}>
+        <View style={styles.hero}>
+          <View style={styles.avatar}>
+            <Ionicons name="business" size={44} color={colors.brand} />
           </View>
-          <Text className="text-white text-2xl font-bold text-center">
-            ماليان للتجارة والحدائق
-          </Text>
-          <Text className="text-neutral-500 mt-2 text-center">
-            نباتات اصطناعية — قطر
-          </Text>
+          <Text style={styles.heroTitle}>ماليان للتجارة والحدائق</Text>
+          <Text style={styles.heroSub}>نباتات اصطناعية — قطر</Text>
         </View>
 
-        <View className="bg-neutral-900 rounded-2xl border border-neutral-800 overflow-hidden">
+        <View style={styles.card}>
           <Row
             icon="leaf-outline"
             label="من نحن"
@@ -37,7 +34,7 @@ export default function ProfileScreen() {
           />
         </View>
 
-        <Text className="text-neutral-600 text-xs text-center mt-10 px-4 leading-5">
+        <Text style={styles.disclaimer}>
           هذا التطبيق لعملاء ماليان. للاستفسارات حول الطلبات والتوصيل، تواصل مع فريق
           الخدمة.
         </Text>
@@ -60,15 +57,73 @@ function Row({
   return (
     <Pressable
       onPress={onPress}
-      className={`flex-row items-center justify-between px-4 py-4 active:bg-neutral-800 ${
-        !last ? "border-b border-neutral-800" : ""
-      }`}
+      style={({ pressed }) => [
+        styles.row,
+        !last && styles.rowBorder,
+        pressed && styles.rowPressed,
+      ]}
     >
-      <Ionicons name="chevron-back" size={20} color="#6b7280" />
-      <View className="flex-row items-center flex-1 justify-end gap-3">
-        <Text className="text-white font-medium text-base">{label}</Text>
-        <Ionicons name={icon} size={22} color="#1a7a3c" />
+      <Ionicons name="chevron-back" size={20} color={colors.neutral500} />
+      <View style={styles.rowInner}>
+        <Text style={styles.rowLabel}>{label}</Text>
+        <Ionicons name={icon} size={22} color={colors.brand} />
       </View>
     </Pressable>
   );
 }
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.bg },
+  pad: { paddingHorizontal: 24, paddingTop: 16 },
+  hero: { alignItems: "center", marginBottom: 40 },
+  avatar: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: colors.brandMutedBg,
+    borderWidth: 2,
+    borderColor: colors.brand,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+  },
+  heroTitle: {
+    color: colors.white,
+    fontSize: 24,
+    fontWeight: "700",
+    textAlign: "center",
+  },
+  heroSub: { color: colors.neutral500, marginTop: 8, textAlign: "center" },
+  card: {
+    backgroundColor: colors.neutral900,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.neutral800,
+    overflow: "hidden",
+  },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+  },
+  rowBorder: { borderBottomWidth: 1, borderBottomColor: colors.neutral800 },
+  rowPressed: { backgroundColor: colors.neutral800 },
+  rowInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    justifyContent: "flex-end",
+    gap: 12,
+  },
+  rowLabel: { color: colors.white, fontWeight: "500", fontSize: 16 },
+  disclaimer: {
+    color: colors.neutral600,
+    fontSize: 12,
+    textAlign: "center",
+    marginTop: 40,
+    paddingHorizontal: 16,
+    lineHeight: 20,
+  },
+});
