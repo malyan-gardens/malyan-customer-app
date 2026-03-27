@@ -1,0 +1,29 @@
+{
+  "expo": {
+    "name": "Malyan Gardens",
+    "slug": "malyan-customer-app",
+    "scheme": "malyan",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#000000",
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.malyan.gardens.customer"
+    },
+    "android": {
+      "package": "com.malyan.gardens.customer",
+      "adaptiveIcon": {
+        "backgroundColor": "#000000"
+      }
+    },
+    "plugins": ["expo-router"],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "supportsRTL": true
+    }
+  }
+}
