@@ -3,6 +3,7 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import { I18nManager, Platform } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { colors } from "../lib/theme";
 
 export default function RootLayout() {
   useEffect(() => {
@@ -13,17 +14,37 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <GestureHandlerRootView style={{ flex: 1, backgroundColor: "#000000" }}>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.bg }}>
       <StatusBar style="light" />
       <Stack
         screenOptions={{
-          headerStyle: { backgroundColor: "#000000" },
-          headerTintColor: "#ffffff",
-          headerTitleStyle: { fontWeight: "600" },
+          headerStyle: { backgroundColor: colors.bg },
+          headerTintColor: colors.white,
+          headerTitleStyle: { fontWeight: "700" },
           headerShadowVisible: false,
-          contentStyle: { backgroundColor: "#000000" },
+          contentStyle: { backgroundColor: colors.bg },
+          animation: "fade_from_bottom",
         }}
-      />
+      >
+        <Stack.Screen name="index" options={{ headerShown: false }} />
+        <Stack.Screen name="login" options={{ headerShown: false }} />
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen
+          name="product/[id]"
+          options={{ title: "تفاصيل المنتج" }}
+        />
+        <Stack.Screen
+          name="plants"
+          options={{ title: "النباتات الاصطناعية" }}
+        />
+        <Stack.Screen name="maintenance" options={{ title: "الصيانة" }} />
+        <Stack.Screen
+          name="design"
+          options={{ title: "تصميم المساحات" }}
+        />
+        <Stack.Screen name="checkout" options={{ title: "إتمام الطلب" }} />
+        <Stack.Screen name="order-success" options={{ title: "تم بنجاح" }} />
+      </Stack>
     </GestureHandlerRootView>
   );
 }

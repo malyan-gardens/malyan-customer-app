@@ -1,44 +1,47 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
-import { Platform } from "react-native";
+import { Platform, StyleSheet } from "react-native";
+import { colors } from "../../lib/theme";
 
 export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
-        headerShown: true,
-        headerStyle: { backgroundColor: "#000000" },
-        headerTintColor: "#ffffff",
-        headerTitleStyle: { fontWeight: "700" },
-        tabBarStyle: {
-          backgroundColor: "#000000",
-          borderTopColor: "#1a7a3c",
-          borderTopWidth: 1,
-          paddingTop: Platform.OS === "ios" ? 4 : 0,
-          height: Platform.OS === "ios" ? 88 : 64,
-        },
-        tabBarActiveTintColor: "#1a7a3c",
-        tabBarInactiveTintColor: "#6b7280",
-        tabBarLabelStyle: { fontSize: 12, fontWeight: "600" },
+        headerShown: false,
+        tabBarStyle: styles.tabBar,
+        tabBarActiveTintColor: colors.gold,
+        tabBarInactiveTintColor: colors.textMuted,
+        tabBarLabelStyle: styles.tabLabel,
+        tabBarItemStyle: { paddingTop: 6 },
       }}
     >
       <Tabs.Screen
         name="home"
         options={{
-          title: "المتجر",
+          title: "الرئيسية",
           tabBarLabel: "الرئيسية",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home-outline" size={size} color={color} />
+            <Ionicons name="home" size={size} color={color} />
           ),
         }}
       />
       <Tabs.Screen
         name="cart"
         options={{
-          title: "سلة التسوق",
+          title: "السلة",
           tabBarLabel: "السلة",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="cart-outline" size={size} color={color} />
+            <Ionicons name="cart" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="assistant"
+        options={{
+          title: "المساعد",
+          tabBarLabel: "المساعد",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="chatbubbles" size={size} color={color} />
           ),
         }}
       />
@@ -48,10 +51,26 @@ export default function TabsLayout() {
           title: "حسابي",
           tabBarLabel: "حسابي",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person-outline" size={size} color={color} />
+            <Ionicons name="person" size={size} color={color} />
           ),
         }}
       />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  tabBar: {
+    backgroundColor: colors.bgElevated,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    height: Platform.OS === "ios" ? 88 : 68,
+    paddingTop: 4,
+    paddingBottom: Platform.OS === "ios" ? 28 : 10,
+  },
+  tabLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    marginBottom: 2,
+  },
+});
