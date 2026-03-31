@@ -7,6 +7,7 @@ import {
   Linking,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -67,7 +68,11 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={styles.screen} edges={["top", "bottom"]}>
-      <View style={styles.pad}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
+        <View style={styles.pad}>
         <View style={styles.hero}>
           <View style={styles.avatar}>
             <View style={styles.avatarInner}>
@@ -136,14 +141,6 @@ export default function ProfileScreen() {
           />
         </View>
 
-        <Pressable
-          onPress={logout}
-          style={({ pressed }) => [styles.logout, pressed && { opacity: 0.9 }]}
-        >
-          <Ionicons name="log-out-outline" size={22} color={colors.red400} />
-          <Text style={styles.logoutText}>تسجيل الخروج</Text>
-        </Pressable>
-
         <View style={styles.footer}>
           <MalyanLogo size="lg" />
           <Text style={styles.footerTag}>Malyan Gardens</Text>
@@ -161,7 +158,15 @@ export default function ProfileScreen() {
           </Pressable>
           <Text style={styles.copyright}>Copyright © 2025 Malyan Gardens</Text>
         </View>
-      </View>
+        <Pressable
+          onPress={logout}
+          style={({ pressed }) => [styles.logout, pressed && { opacity: 0.9 }]}
+        >
+          <Ionicons name="log-out-outline" size={22} color="#ffffff" />
+          <Text style={styles.logoutText}>تسجيل الخروج</Text>
+        </Pressable>
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -229,6 +234,7 @@ function ContactRow({
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
+  scrollContent: { paddingBottom: spacing.xl },
   pad: { paddingHorizontal: spacing.lg, paddingTop: spacing.md },
   hero: { alignItems: "center", marginBottom: spacing.lg },
   avatar: {
@@ -330,15 +336,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 10,
-    marginTop: spacing.sm,
+    marginTop: spacing.md,
     paddingVertical: 16,
     borderRadius: radii.lg,
     borderWidth: 1,
-    borderColor: "#1a7a3c",
-    backgroundColor: "rgba(26,122,60,0.22)",
+    borderColor: "#ef4444",
+    backgroundColor: "#ef4444",
   },
   logoutText: {
-    color: "#c9a84c",
+    color: "#ffffff",
     fontWeight: "800",
     fontSize: 16,
     fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
