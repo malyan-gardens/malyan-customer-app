@@ -1,6 +1,16 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { Alert, Linking, Pressable, StyleSheet, Text, View } from "react-native";
+import { useEffect, useState } from "react";
+import {
+  Alert,
+  Image,
+  Linking,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MalyanLogo } from "../../components/MalyanLogo";
 import { CONTACT } from "../../lib/contact";
@@ -9,6 +19,37 @@ import { colors, radii, shadows, spacing } from "../../lib/theme";
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const [displayName, setDisplayName] = useState("مستخدم مليان");
+  const [email, setEmail] = useState(CONTACT.email);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadUser = async () => {
+      const { data } = await supabase.auth.getUser();
+      const user = data.user;
+      if (!mounted || !user) return;
+
+      const metadata = (user.user_metadata ?? {}) as Record<string, unknown>;
+      const maybeName =
+        (typeof metadata.full_name === "string" && metadata.full_name) ||
+        (typeof metadata.name === "string" && metadata.name) ||
+        user.email ||
+        "مستخدم مليان";
+      const maybeAvatar =
+        (typeof metadata.avatar_url === "string" && metadata.avatar_url) ||
+        (typeof metadata.picture === "string" && metadata.picture) ||
+        null;
+
+      setDisplayName(maybeName);
+      setEmail(user.email ?? CONTACT.email);
+      setAvatarUrl(maybeAvatar);
+    };
+    void loadUser();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const logout = () => {
     Alert.alert("تسجيل الخروج", "هل تريد المغادرة؟", [
@@ -30,11 +71,15 @@ export default function ProfileScreen() {
         <View style={styles.hero}>
           <View style={styles.avatar}>
             <View style={styles.avatarInner}>
-              <Ionicons name="person" size={36} color={colors.gold} />
+              {avatarUrl ? (
+                <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+              ) : (
+                <Ionicons name="person" size={36} color={colors.gold} />
+              )}
             </View>
           </View>
-          <Text style={styles.heroTitle}>زائر مليان</Text>
-          <Text style={styles.heroSub}>{CONTACT.email}</Text>
+          <Text style={styles.heroTitle}>{displayName}</Text>
+          <Text style={styles.heroSub}>{email}</Text>
         </View>
 
         <View style={styles.card}>
@@ -204,19 +249,27 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
+  avatarImage: { width: "100%", height: "100%", borderRadius: 48 },
   heroTitle: {
     color: colors.white,
     fontSize: 22,
     fontWeight: "800",
     textAlign: "center",
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
   },
-  heroSub: { color: colors.textMuted, marginTop: 6, textAlign: "center" },
+  heroSub: {
+    color: colors.gold,
+    marginTop: 6,
+    textAlign: "center",
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
+  },
   blockTitle: {
-    color: colors.white,
+    color: "#c9a84c",
     fontSize: 16,
     fontWeight: "800",
     textAlign: "right",
     marginBottom: 10,
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
   },
   card: {
     backgroundColor: colors.surface,
@@ -247,6 +300,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
     textAlign: "right",
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
   },
   contactValue: {
     color: colors.white,
@@ -254,6 +308,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     textAlign: "right",
     marginTop: 4,
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
   },
   rowBorder: { borderBottomWidth: 1, borderBottomColor: colors.border },
   rowPressed: { backgroundColor: colors.bgElevated },
@@ -264,7 +319,12 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
     gap: 12,
   },
-  rowLabel: { color: colors.white, fontWeight: "600", fontSize: 16 },
+  rowLabel: {
+    color: colors.white,
+    fontWeight: "600",
+    fontSize: 16,
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
+  },
   logout: {
     flexDirection: "row",
     alignItems: "center",
@@ -274,10 +334,15 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: radii.lg,
     borderWidth: 1,
-    borderColor: "rgba(248,113,113,0.35)",
-    backgroundColor: "rgba(248,113,113,0.08)",
+    borderColor: "#1a7a3c",
+    backgroundColor: "rgba(26,122,60,0.22)",
   },
-  logoutText: { color: colors.red400, fontWeight: "800", fontSize: 16 },
+  logoutText: {
+    color: "#c9a84c",
+    fontWeight: "800",
+    fontSize: 16,
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
+  },
   footer: {
     alignItems: "center",
     marginTop: spacing.xl,
@@ -289,21 +354,25 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: 14,
     fontWeight: "600",
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
   },
   footerLink: {
     color: colors.gold,
     fontWeight: "700",
     fontSize: 15,
     textDecorationLine: "underline",
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
   },
   footerLinkMuted: {
     color: colors.textSecondary,
     fontSize: 14,
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
   },
   copyright: {
     color: colors.textMuted,
     fontSize: 12,
     marginTop: 8,
     textAlign: "center",
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
   },
 });
