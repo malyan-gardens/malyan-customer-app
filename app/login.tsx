@@ -31,7 +31,7 @@ export default function LoginScreen() {
     null
   );
   const [error, setError] = useState<string | null>(null);
-  const redirectTo = makeRedirectUri({ path: "login" });
+  const redirectTo = makeRedirectUri({ path: "auth/callback" });
 
   const normalizePhone = (raw: string) => {
     const digits = raw.replace(/\D/g, "");
@@ -60,7 +60,11 @@ export default function LoginScreen() {
       if (oauthError) throw oauthError;
 
       if (data?.url) {
-        await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+        if (result.type === "success") {
+          router.replace("/auth/callback");
+          return;
+        }
       }
       const { data: sessionData } = await supabase.auth.getSession();
       if (sessionData.session) router.replace("/(tabs)/home");
