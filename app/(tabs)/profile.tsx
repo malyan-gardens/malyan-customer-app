@@ -4,7 +4,7 @@ import { Alert, Linking, Pressable, StyleSheet, Text, View } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MalyanLogo } from "../../components/MalyanLogo";
 import { CONTACT } from "../../lib/contact";
-import { setSession } from "../../lib/authStorage";
+import { supabase } from "../../lib/supabase";
 import { colors, radii, shadows, spacing } from "../../lib/theme";
 
 export default function ProfileScreen() {
@@ -17,7 +17,7 @@ export default function ProfileScreen() {
         text: "خروج",
         style: "destructive",
         onPress: async () => {
-          await setSession(false);
+          await supabase.auth.signOut();
           router.replace("/login");
         },
       },

@@ -1,8 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
+import { makeRedirectUri } from "expo-auth-session";
+import * as WebBrowser from "expo-web-browser";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -13,38 +15,105 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { MalyanLogo } from "../components/MalyanLogo";
-import { setSession } from "../lib/authStorage";
+import { supabase } from "../lib/supabase";
 import { colors, radii, shadows, spacing } from "../lib/theme";
 
-type Step = "choose" | "phone" | "otp";
+WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen() {
   const router = useRouter();
-  const [step, setStep] = useState<Step>("choose");
-  const [phone, setPhone] = useState("");
+  const [showPhoneOtp, setShowPhoneOtp] = useState(false);
+  const [phone, setPhone] = useState("+974");
   const [otp, setOtp] = useState("");
+  const [sendingOtp, setSendingOtp] = useState(false);
+  const [verifyingOtp, setVerifyingOtp] = useState(false);
+  const [providerLoading, setProviderLoading] = useState<null | "google" | "apple">(
+    null
+  );
+  const [error, setError] = useState<string | null>(null);
+  const redirectTo = makeRedirectUri({ path: "login" });
 
-  const goHome = async () => {
-    await setSession(true);
-    router.replace("/(tabs)/home");
+  const normalizePhone = (raw: string) => {
+    const digits = raw.replace(/\D/g, "");
+    const withCountry = digits.startsWith("974") ? digits : `974${digits}`;
+    return `+${withCountry.slice(0, 11)}`;
   };
 
-  const normalizeQatar = (raw: string) => raw.replace(/\D/g, "").slice(0, 8);
+  const oauthLogin = async (provider: "google" | "apple") => {
+    try {
+      setError(null);
+      setProviderLoading(provider);
 
-  const submitPhone = () => {
-    if (normalizeQatar(phone).length >= 8) setStep("otp");
+      if (Platform.OS === "web") {
+        const { error: oauthError } = await supabase.auth.signInWithOAuth({
+          provider,
+          options: { redirectTo },
+        });
+        if (oauthError) throw oauthError;
+        return;
+      }
+
+      const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: { redirectTo, skipBrowserRedirect: true },
+      });
+      if (oauthError) throw oauthError;
+
+      if (data?.url) {
+        await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+      }
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (sessionData.session) router.replace("/(tabs)/home");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "تعذر تسجيل الدخول.");
+    } finally {
+      setProviderLoading(null);
+    }
   };
 
-  const submitOtp = () => {
-    if (otp.length >= 4) void goHome();
+  const submitPhone = async () => {
+    try {
+      setError(null);
+      const normalized = normalizePhone(phone);
+      if (!/^\+974\d{8}$/.test(normalized)) {
+        setError("يرجى إدخال رقم صحيح بصيغة +974XXXXXXXX");
+        return;
+      }
+      setSendingOtp(true);
+      const { error: otpError } = await supabase.auth.signInWithOtp({ phone: normalized });
+      if (otpError) throw otpError;
+      setPhone(normalized);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "تعذر إرسال رمز OTP.");
+    } finally {
+      setSendingOtp(false);
+    }
+  };
+
+  const submitOtp = async () => {
+    try {
+      setError(null);
+      if (!/^\d{6}$/.test(otp)) {
+        setError("يرجى إدخال رمز مكوّن من 6 أرقام.");
+        return;
+      }
+      setVerifyingOtp(true);
+      const { error: verifyError } = await supabase.auth.verifyOtp({
+        phone: normalizePhone(phone),
+        token: otp,
+        type: "sms",
+      });
+      if (verifyError) throw verifyError;
+      router.replace("/(tabs)/home");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "فشل التحقق من الرمز.");
+    } finally {
+      setVerifyingOtp(false);
+    }
   };
 
   return (
-    <LinearGradient
-      colors={[colors.bg, "#0f1f14", colors.bg]}
-      style={styles.gradient}
-    >
+    <View style={styles.screen}>
       <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
         <KeyboardAvoidingView
           style={styles.flex}
@@ -56,118 +125,116 @@ export default function LoginScreen() {
             showsVerticalScrollIndicator={false}
           >
             <View style={styles.logoBlock}>
-              <MalyanLogo size="md" />
-              <Text style={styles.welcome}>مرحباً بك في ماليان</Text>
+              <Ionicons name="leaf" size={46} color="#1a7a3c" />
+              <Text style={styles.brand}>مليان للحدائق</Text>
             </View>
 
-            {step === "choose" && (
-              <View style={styles.card}>
-                <Text style={styles.cardTitle}>تسجيل الدخول</Text>
-                <Pressable
-                  onPress={() => void goHome()}
-                  style={({ pressed }) => [
-                    styles.btn,
-                    styles.btnGoogle,
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  <Ionicons name="logo-google" size={22} color="#fff" />
-                  <Text style={styles.btnText}>تسجيل الدخول بـ Google</Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => void goHome()}
-                  style={({ pressed }) => [
-                    styles.btn,
-                    styles.btnApple,
-                    pressed && styles.pressed,
-                  ]}
-                >
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>تسجيل الدخول</Text>
+              <Pressable
+                onPress={() => void oauthLogin("google")}
+                style={({ pressed }) => [styles.btn, styles.btnGoogle, pressed && styles.pressed]}
+                disabled={providerLoading !== null}
+              >
+                {providerLoading === "google" ? (
+                  <ActivityIndicator color="#111" />
+                ) : (
+                  <Ionicons name="logo-google" size={22} color="#DB4437" />
+                )}
+                <Text style={styles.btnGoogleText}>تسجيل بجوجل</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => void oauthLogin("apple")}
+                style={({ pressed }) => [styles.btn, styles.btnApple, pressed && styles.pressed]}
+                disabled={providerLoading !== null}
+              >
+                {providerLoading === "apple" ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
                   <Ionicons name="logo-apple" size={24} color="#fff" />
-                  <Text style={styles.btnText}>تسجيل الدخول بـ Apple</Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => setStep("phone")}
-                  style={({ pressed }) => [
-                    styles.btn,
-                    styles.btnBrand,
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  <Ionicons name="call-outline" size={22} color="#fff" />
-                  <Text style={styles.btnText}>تسجيل الدخول برقم الهاتف</Text>
-                </Pressable>
-              </View>
-            )}
+                )}
+                <Text style={styles.btnText}>تسجيل بـ Apple</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setShowPhoneOtp((v) => !v)}
+                style={({ pressed }) => [
+                  styles.btn,
+                  styles.btnWhatsapp,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Ionicons name="logo-whatsapp" size={22} color="#fff" />
+                <Text style={styles.btnText}>تسجيل برقم الواتساب</Text>
+              </Pressable>
 
-            {step === "phone" && (
-              <View style={styles.card}>
-                <Text style={styles.cardTitle}>رقم الهاتف في قطر</Text>
-                <Text style={styles.hint}>أدخل الرقم بدون +974</Text>
-                <View style={styles.phoneRow}>
-                  <Text style={styles.prefix}>+974</Text>
+              {showPhoneOtp ? (
+                <>
+                  <Text style={styles.hint}>أدخل رقم الجوال: +974XXXXXXXX</Text>
+                  <View style={styles.phoneRow}>
+                    <TextInput
+                      value={phone}
+                      onChangeText={(t) => setPhone(normalizePhone(t))}
+                      placeholder="+974XXXXXXXX"
+                      placeholderTextColor={colors.textMuted}
+                      keyboardType="phone-pad"
+                      style={styles.input}
+                      maxLength={12}
+                      textAlign="left"
+                    />
+                  </View>
+                  <Pressable
+                    onPress={() => void submitPhone()}
+                    style={({ pressed }) => [
+                      styles.btn,
+                      styles.btnWhatsapp,
+                      pressed && styles.pressed,
+                    ]}
+                    disabled={sendingOtp || verifyingOtp}
+                  >
+                    {sendingOtp ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text style={styles.btnText}>إرسال رمز OTP</Text>
+                    )}
+                  </Pressable>
+                  <Text style={styles.hint}>أدخل رمز التحقق (6 أرقام)</Text>
                   <TextInput
-                    value={phone}
-                    onChangeText={(t) => setPhone(normalizeQatar(t))}
-                    placeholder="XXXXXXXX"
+                    value={otp}
+                    onChangeText={(t) => setOtp(t.replace(/\D/g, "").slice(0, 6))}
+                    placeholder="000000"
                     placeholderTextColor={colors.textMuted}
-                    keyboardType="phone-pad"
-                    style={styles.input}
-                    maxLength={8}
+                    keyboardType="number-pad"
+                    style={styles.inputOtp}
+                    maxLength={6}
                   />
-                </View>
-                <Pressable
-                  onPress={submitPhone}
-                  style={({ pressed }) => [
-                    styles.btn,
-                    styles.btnBrand,
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  <Text style={styles.btnText}>إرسال رمز التحقق</Text>
-                </Pressable>
-                <Pressable onPress={() => setStep("choose")}>
-                  <Text style={styles.link}>رجوع</Text>
-                </Pressable>
-              </View>
-            )}
-
-            {step === "otp" && (
-              <View style={styles.card}>
-                <Text style={styles.cardTitle}>رمز التحقق</Text>
-                <Text style={styles.hint}>أدخل الرمز المرسل إلى هاتفك</Text>
-                <TextInput
-                  value={otp}
-                  onChangeText={setOtp}
-                  placeholder="••••"
-                  placeholderTextColor={colors.textMuted}
-                  keyboardType="number-pad"
-                  style={styles.inputOtp}
-                  maxLength={6}
-                />
-                <Pressable
-                  onPress={submitOtp}
-                  style={({ pressed }) => [
-                    styles.btn,
-                    styles.btnBrand,
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  <Text style={styles.btnText}>تأكيد</Text>
-                </Pressable>
-                <Pressable onPress={() => setStep("phone")}>
-                  <Text style={styles.link}>تعديل الرقم</Text>
-                </Pressable>
-              </View>
-            )}
+                  <Pressable
+                    onPress={() => void submitOtp()}
+                    style={({ pressed }) => [
+                      styles.btn,
+                      styles.btnWhatsapp,
+                      pressed && styles.pressed,
+                    ]}
+                    disabled={sendingOtp || verifyingOtp}
+                  >
+                    {verifyingOtp ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text style={styles.btnText}>تأكيد الرمز</Text>
+                    )}
+                  </Pressable>
+                </>
+              ) : null}
+              {error ? <Text style={styles.errorText}>{error}</Text> : null}
+            </View>
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  gradient: { flex: 1 },
+  screen: { flex: 1, backgroundColor: "#0a0a0a" },
   safe: { flex: 1 },
   flex: { flex: 1 },
   scroll: {
@@ -176,11 +243,12 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xl,
   },
   logoBlock: { alignItems: "center", marginBottom: spacing.xl },
-  welcome: {
-    color: colors.gold,
-    fontSize: 16,
-    fontWeight: "600",
+  brand: {
+    color: "#1a7a3c",
+    fontSize: 30,
+    fontWeight: "800",
     marginTop: spacing.md,
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
   },
   card: {
     backgroundColor: colors.surface,
@@ -196,12 +264,14 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     textAlign: "right",
     marginBottom: spacing.md,
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
   },
   hint: {
     color: colors.textMuted,
     fontSize: 13,
     textAlign: "right",
     marginBottom: spacing.sm,
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
   },
   btn: {
     flexDirection: "row",
@@ -212,14 +282,21 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     marginBottom: 12,
   },
-  btnGoogle: { backgroundColor: colors.googleRed },
-  btnApple: {
-    backgroundColor: colors.appleBlack,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
+  btnGoogle: { backgroundColor: "#ffffff" },
+  btnApple: { backgroundColor: "#000000" },
+  btnWhatsapp: { backgroundColor: "#25D366" },
+  btnText: {
+    color: colors.white,
+    fontWeight: "700",
+    fontSize: 16,
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
   },
-  btnBrand: { backgroundColor: colors.brand },
-  btnText: { color: colors.white, fontWeight: "700", fontSize: 16 },
+  btnGoogleText: {
+    color: "#111",
+    fontWeight: "700",
+    fontSize: 16,
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
+  },
   pressed: { opacity: 0.88 },
   phoneRow: {
     flexDirection: "row",
@@ -242,7 +319,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     fontSize: 18,
-    textAlign: "right",
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
   },
   inputOtp: {
     backgroundColor: colors.bgElevated,
@@ -256,11 +333,12 @@ const styles = StyleSheet.create({
     textAlign: "center",
     letterSpacing: 8,
     marginBottom: spacing.md,
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
   },
-  link: {
-    color: colors.gold,
+  errorText: {
+    color: colors.red400,
     textAlign: "center",
     marginTop: 8,
-    fontWeight: "600",
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
   },
 });
