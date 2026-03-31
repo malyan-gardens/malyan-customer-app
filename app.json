@@ -1,0 +1,38 @@
+{
+  "expo": {
+    "name": "مليان للحدائق | Malyan Gardens",
+    "description": "تطبيق مليان للحدائق — نباتات اصطناعية فاخرة، صيانة، وتصميم مساحات في قطر.",
+    "slug": "malyan-customer-app",
+    "scheme": "malyan",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0a0a0a",
+    "platforms": ["ios", "android", "web"],
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "name": "مليان للحدائق | Malyan Gardens",
+      "backgroundColor": "#0a0a0a",
+      "themeColor": "#1a7a3c"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.malyan.gardens.customer"
+    },
+    "android": {
+      "package": "com.malyan.gardens.customer",
+      "adaptiveIcon": {
+        "backgroundColor": "#0a0a0a"
+      }
+    },
+    "plugins": ["expo-router"],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "supportsRTL": true
+    }
+  }
+}
