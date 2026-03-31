@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   Alert,
@@ -19,7 +19,6 @@ import { supabase } from "../../lib/supabase";
 import { colors, radii, shadows, spacing } from "../../lib/theme";
 
 export default function ProfileScreen() {
-  const router = useRouter();
   const [displayName, setDisplayName] = useState("مستخدم مليان");
   const [email, setEmail] = useState(CONTACT.email);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
@@ -52,19 +51,10 @@ export default function ProfileScreen() {
     };
   }, []);
 
-  const logout = () => {
-    Alert.alert("تسجيل الخروج", "هل تريد المغادرة؟", [
-      { text: "إلغاء", style: "cancel" },
-      {
-        text: "خروج",
-        style: "destructive",
-        onPress: async () => {
-          await supabase.auth.signOut();
-          router.replace("/login");
-        },
-      },
-    ]);
-  };
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    router.replace("/login");
+  }
 
   return (
     <SafeAreaView style={styles.screen} edges={["top", "bottom"]}>
@@ -159,7 +149,7 @@ export default function ProfileScreen() {
           <Text style={styles.copyright}>Copyright © 2025 Malyan Gardens</Text>
         </View>
         <Pressable
-          onPress={logout}
+          onPress={() => void handleLogout()}
           style={({ pressed }) => [styles.logout, pressed && { opacity: 0.9 }]}
         >
           <Ionicons name="log-out-outline" size={22} color="#ffffff" />
@@ -234,7 +224,7 @@ function ContactRow({
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
-  scrollContent: { paddingBottom: spacing.xl },
+  scrollContent: { paddingBottom: 100 },
   pad: { paddingHorizontal: spacing.lg, paddingTop: spacing.md },
   hero: { alignItems: "center", marginBottom: spacing.lg },
   avatar: {
