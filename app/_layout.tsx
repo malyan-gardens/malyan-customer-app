@@ -36,7 +36,7 @@ export default function RootLayout() {
         />
         <Stack.Screen
           name="plants"
-          options={{ title: "النباتات الاصطناعية" }}
+          options={{ title: "المنتجات" }}
         />
         <Stack.Screen name="maintenance" options={{ title: "الصيانة" }} />
         <Stack.Screen

@@ -34,7 +34,7 @@ const HERO_SLIDES = [
   {
     key: "1",
     title: "أناقة دائمة",
-    sub: "نباتات اصطناعية بجودة فاخرة",
+    sub: "منتجات فاخرة بجودة عالية",
     colors: ["#145e2f", "#1a7a3c", "#0a0a0a"] as const,
   },
   {
@@ -52,7 +52,7 @@ const HERO_SLIDES = [
 ];
 
 const CATEGORIES = [
-  { key: "plants", emoji: "🌿", label: "النباتات الاصطناعية", href: "/plants" as const },
+  { key: "plants", emoji: "🌿", label: "المنتجات", href: "/plants" as const },
   { key: "maint", emoji: "🔧", label: "الصيانة", href: "/maintenance" as const },
   { key: "design", emoji: "🎨", label: "تصميم المساحات", href: "/design" as const },
   { key: "offers", emoji: "⭐", label: "العروض", href: "/plants" as const },

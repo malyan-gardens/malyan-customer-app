@@ -36,7 +36,7 @@ export default function CartScreen() {
             </LinearGradient>
             <Text style={styles.emptyTitle}>السلة فارغة</Text>
             <Text style={styles.emptySub}>
-              اكتشف تشكيلة النباتات الاصطناعية الفاخرة
+              اكتشف تشكيلة المنتجات الفاخرة
             </Text>
             <Pressable
               onPress={() => router.push("/(tabs)/home")}

@@ -1,9 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { Stack, useRouter } from "expo-router";
 import { useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  Linking,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,163 +15,371 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { supabase } from "../lib/supabase";
 import { colors, radii, shadows, spacing } from "../lib/theme";
 
-const PACKAGES = [
+const BG = "#0a0a0a";
+const GREEN = "#1a7a3c";
+const GOLD = "#c9a84c";
+
+type PackageDef = {
+  id: string;
+  name: string;
+  priceLabel: string;
+  /** null = quote / no fixed price */
+  totalAmount: number | null;
+  detail: string;
+};
+
+const PACKAGES: PackageDef[] = [
   {
-    id: "monthly",
-    title: "صيانة شهرية",
-    price: "150",
-    unit: "شهرياً",
-    detail: "زيارة مجدولة وتنظيف ومراجعة للنباتات",
+    id: "visit_one",
+    name: "زيارة واحدة",
+    priceLabel: "500 QAR",
+    totalAmount: 500,
+    detail: "3 فنيين، 4 ساعات، حتى 500م²",
   },
   {
-    id: "quarter",
-    title: "صيانة ربع سنوية",
-    price: "400",
-    unit: "كل 3 أشهر",
-    detail: "باقة توفير مع فحص أعمق للمساحة",
+    id: "monthly_8",
+    name: "باقة شهرية (8 زيارات)",
+    priceLabel: "2,500 QAR/شهر",
+    totalAmount: 2500,
+    detail: "للحدائق الصغيرة والمتوسطة",
   },
   {
-    id: "urgent",
-    title: "زيارة طارئة",
-    price: "200",
-    unit: "للزيارة",
-    detail: "استجابة سريعة عند الحاجة",
+    id: "large_garden",
+    name: "حديقة كبيرة (+500م²)",
+    priceLabel: "طلب تسعير",
+    totalAmount: null,
+    detail: "السعر حسب الحجم",
   },
 ];
 
+const TEL = "tel:+97450963373";
+
 export default function MaintenanceScreen() {
   const router = useRouter();
-  const [selected, setSelected] = useState<string | null>(null);
-  const [dateStr, setDateStr] = useState("");
-  const [timeStr, setTimeStr] = useState("");
+  const [selected, setSelected] = useState<PackageDef | null>(null);
+  const [customerName, setCustomerName] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
   const [location, setLocation] = useState("");
+  const [scheduledDate, setScheduledDate] = useState("");
+  const [scheduledTime, setScheduledTime] = useState("");
+  const [notes, setNotes] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState<"online" | "cash">("cash");
+  const [submitting, setSubmitting] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [lastRequestId, setLastRequestId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const book = () => {
-    Alert.alert(
-      "طلب الحجز",
-      "سيتم ربط هذا النموذج بجدول المواعيد في Supabase لاحقاً.",
-      [{ text: "حسناً" }]
-    );
+  const submit = async () => {
+    if (!selected) return;
+    setError(null);
+    if (!customerName.trim()) {
+      setError("يرجى إدخال اسم العميل.");
+      return;
+    }
+    if (!customerPhone.trim()) {
+      setError("يرجى إدخال رقم الهاتف.");
+      return;
+    }
+    if (!location.trim()) {
+      setError("يرجى إدخال العنوان / الموقع.");
+      return;
+    }
+    if (!scheduledDate.trim() || !scheduledTime.trim()) {
+      setError("يرجى إدخال تاريخ ووقت الزيارة.");
+      return;
+    }
+
+    setSubmitting(true);
+    const row = {
+      customer_name: customerName.trim(),
+      customer_phone: customerPhone.trim(),
+      service_type: selected.name,
+      location: location.trim(),
+      scheduled_date: scheduledDate.trim(),
+      scheduled_time: scheduledTime.trim(),
+      notes: notes.trim() || null,
+      payment_method: paymentMethod === "online" ? "online" : "cash",
+      status: "pending",
+      total_amount: selected.totalAmount,
+    };
+
+    const { data: insData, error: insErr } = await supabase
+      .from("maintenance_requests")
+      .insert(row)
+      .select("id")
+      .single();
+
+    if (insErr) {
+      setError(insErr.message);
+      setSubmitting(false);
+      return;
+    }
+
+    const notifBody = `${customerName.trim()} — ${selected.name}`;
+    const { error: notifErr } = await supabase.from("notifications").insert({
+      title: "طلب صيانة جديد",
+      body: notifBody,
+      type: "maintenance",
+    });
+    if (notifErr) {
+      setError(`تم حفظ الطلب لكن تعذر إنشاء الإشعار: ${notifErr.message}`);
+    }
+
+    setLastRequestId(insData?.id ?? null);
+    setSuccess(true);
+    setSubmitting(false);
+    Alert.alert("تم", "تم إرسال طلبك بنجاح! سنتواصل معك قريباً", [{ text: "حسناً" }]);
+  };
+
+  const cancelRequest = () => {
+    if (!lastRequestId) return;
+    Alert.alert("إلغاء الطلب", "هل تريد إلغاء آخر طلب صيانة أرسلته؟", [
+      { text: "لا", style: "cancel" },
+      {
+        text: "نعم، إلغاء",
+        style: "destructive",
+        onPress: async () => {
+          const { error: delErr } = await supabase
+            .from("maintenance_requests")
+            .delete()
+            .eq("id", lastRequestId);
+          if (delErr) {
+            Alert.alert("خطأ", delErr.message);
+            return;
+          }
+          setLastRequestId(null);
+          setSuccess(false);
+          Alert.alert("تم", "تم إلغاء الطلب.");
+        },
+      },
+    ]);
   };
 
   return (
     <>
-      <Stack.Screen options={{ title: "الصيانة" }} />
+      <Stack.Screen options={{ title: "حجز الصيانة" }} />
       <SafeAreaView style={styles.screen} edges={["bottom"]}>
-        <ScrollView
-          contentContainerStyle={styles.pad}
-          showsVerticalScrollIndicator={false}
+        <KeyboardAvoidingView
+          style={styles.flex}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
-          <LinearGradient
-            colors={[colors.brandDark, colors.brand]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.hero}
+          <ScrollView
+            contentContainerStyle={styles.scroll}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
           >
-            <Text style={styles.heroTitle}>خدمات الصيانة</Text>
+            <Text style={styles.heroTitle}>خدمات الصيانة — مليان للحدائق</Text>
             <Text style={styles.heroSub}>
-              فريق ماليان يحافظ على جمال مساحتك طوال العام
+              اختر الباقة، ثم أكمل بيانات الحجز. فريق مليان يحافظ على جمال مساحتك.
             </Text>
-          </LinearGradient>
 
-          {PACKAGES.map((p) => (
-            <Pressable
-              key={p.id}
-              onPress={() => setSelected(p.id)}
-              style={({ pressed }) => [
-                styles.pkg,
-                selected === p.id && styles.pkgOn,
-                pressed && { opacity: 0.95 },
-              ]}
-            >
-              <View style={styles.pkgTop}>
-                <Text style={styles.pkgTitle}>{p.title}</Text>
-                <View style={styles.priceTag}>
-                  <Text style={styles.priceVal}>{p.price}</Text>
-                  <Text style={styles.priceCur}>QAR</Text>
+            <Text style={styles.sectionTitle}>الباقات</Text>
+            {PACKAGES.map((p) => (
+              <Pressable
+                key={p.id}
+                onPress={() => {
+                  setSelected(p);
+                  setSuccess(false);
+                  setError(null);
+                }}
+                style={({ pressed }) => [
+                  styles.pkg,
+                  selected?.id === p.id && styles.pkgOn,
+                  pressed && { opacity: 0.95 },
+                ]}
+              >
+                <View style={styles.pkgTop}>
+                  <Text style={styles.pkgTitle}>{p.name}</Text>
+                  <Text style={styles.priceGold}>{p.priceLabel}</Text>
                 </View>
+                <Text style={styles.pkgDetail}>{p.detail}</Text>
+              </Pressable>
+            ))}
+
+            {selected ? (
+              <View style={styles.formBlock}>
+                <Text style={styles.sectionTitle}>بيانات الحجز</Text>
+                <Text style={styles.label}>اسم العميل</Text>
+                <TextInput
+                  value={customerName}
+                  onChangeText={setCustomerName}
+                  placeholder="الاسم الكامل"
+                  placeholderTextColor={colors.textMuted}
+                  style={styles.input}
+                />
+                <Text style={styles.label}>رقم الهاتف</Text>
+                <TextInput
+                  value={customerPhone}
+                  onChangeText={setCustomerPhone}
+                  placeholder="+974 …"
+                  placeholderTextColor={colors.textMuted}
+                  keyboardType="phone-pad"
+                  style={styles.input}
+                />
+                <Text style={styles.label}>العنوان / الموقع</Text>
+                <TextInput
+                  value={location}
+                  onChangeText={setLocation}
+                  placeholder="المنطقة، الشارع، المبنى…"
+                  placeholderTextColor={colors.textMuted}
+                  style={styles.input}
+                />
+                <Text style={styles.label}>تاريخ الزيارة</Text>
+                <TextInput
+                  value={scheduledDate}
+                  onChangeText={setScheduledDate}
+                  placeholder="مثال: 2026-04-15"
+                  placeholderTextColor={colors.textMuted}
+                  style={styles.input}
+                />
+                <Text style={styles.label}>وقت الزيارة</Text>
+                <TextInput
+                  value={scheduledTime}
+                  onChangeText={setScheduledTime}
+                  placeholder="مثال: 10:00 – 14:00"
+                  placeholderTextColor={colors.textMuted}
+                  style={styles.input}
+                />
+                <Text style={styles.label}>ملاحظات (اختياري)</Text>
+                <TextInput
+                  value={notes}
+                  onChangeText={setNotes}
+                  placeholder="تفاصيل إضافية…"
+                  placeholderTextColor={colors.textMuted}
+                  style={[styles.input, styles.inputMulti]}
+                  multiline
+                />
+
+                <Text style={styles.label}>طريقة الدفع</Text>
+                <View style={styles.payRow}>
+                  <Pressable
+                    style={[
+                      styles.payBtn,
+                      paymentMethod === "online" && styles.payBtnOn,
+                    ]}
+                    onPress={() => setPaymentMethod("online")}
+                  >
+                    <Text
+                      style={[
+                        styles.payBtnText,
+                        paymentMethod === "online" && styles.payBtnTextOn,
+                      ]}
+                    >
+                      دفع أونلاين
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    style={[
+                      styles.payBtn,
+                      paymentMethod === "cash" && styles.payBtnOn,
+                    ]}
+                    onPress={() => setPaymentMethod("cash")}
+                  >
+                    <Text
+                      style={[
+                        styles.payBtnText,
+                        paymentMethod === "cash" && styles.payBtnTextOn,
+                      ]}
+                    >
+                      كاش عند الزيارة
+                    </Text>
+                  </Pressable>
+                </View>
+
+                {error ? <Text style={styles.err}>{error}</Text> : null}
+
+                <Pressable
+                  style={[styles.submitBtn, submitting && { opacity: 0.85 }]}
+                  onPress={() => void submit()}
+                  disabled={submitting}
+                >
+                  {submitting ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <>
+                      <Ionicons name="send" size={20} color="#fff" />
+                      <Text style={styles.submitText}>إرسال الطلب</Text>
+                    </>
+                  )}
+                </Pressable>
               </View>
-              <Text style={styles.pkgUnit}>{p.unit}</Text>
-              <Text style={styles.pkgDetail}>{p.detail}</Text>
+            ) : null}
+
+            <Pressable
+              style={styles.callBtn}
+              onPress={() => Linking.openURL(TEL)}
+            >
+              <Ionicons name="call" size={22} color={GOLD} />
+              <Text style={styles.callText}>اتصل بنا</Text>
             </Pressable>
-          ))}
 
-          <Text style={styles.sectionTitle}>حجز موعد</Text>
-          <Text style={styles.label}>التاريخ (مثال: 2026-04-15)</Text>
-          <TextInput
-            value={dateStr}
-            onChangeText={setDateStr}
-            placeholder="YYYY-MM-DD"
-            placeholderTextColor={colors.textMuted}
-            style={styles.input}
-          />
-          <Text style={styles.label}>الوقت</Text>
-          <TextInput
-            value={timeStr}
-            onChangeText={setTimeStr}
-            placeholder="مثال: 10:00 ص"
-            placeholderTextColor={colors.textMuted}
-            style={styles.input}
-          />
-          <Text style={styles.label}>الموقع</Text>
-          <TextInput
-            value={location}
-            onChangeText={setLocation}
-            placeholder="المنطقة، المبنى، رقم الوحدة…"
-            placeholderTextColor={colors.textMuted}
-            style={[styles.input, styles.inputMulti]}
-            multiline
-          />
+            {lastRequestId ? (
+              <Pressable onPress={cancelRequest}>
+                <Text style={styles.cancelLink}>إلغاء طلب</Text>
+              </Pressable>
+            ) : null}
 
-          <Pressable style={styles.bookBtn} onPress={book}>
-            <Ionicons name="calendar" size={22} color="#fff" />
-            <Text style={styles.bookBtnText}>تأكيد الحجز</Text>
-          </Pressable>
+            <Pressable
+              style={styles.aiBtn}
+              onPress={() =>
+                router.push({
+                  pathname: "/(tabs)/assistant",
+                  params: {
+                    from: "maintenance",
+                    initialContext:
+                      "أنا هنا لمساعدتك في خدمات الصيانة. صف لي المشكلة أو نوع الخدمة التي تحتاجها.",
+                  },
+                })
+              }
+            >
+              <Text style={styles.aiBtnText}>🤖 مساعد الصيانة الذكي</Text>
+            </Pressable>
 
-          <Pressable
-            style={styles.aiBtn}
-            onPress={() =>
-              router.push({
-                pathname: "/(tabs)/assistant",
-                params: {
-                  from: "maintenance",
-                  initialContext:
-                    "أنا هنا لمساعدتك في خدمات الصيانة. صف لي المشكلة أو نوع الخدمة التي تحتاجها.",
-                },
-              })
-            }
-          >
-            <Text style={styles.aiBtnText}>🤖 مساعد الصيانة الذكي</Text>
-          </Pressable>
-        </ScrollView>
+            {success ? (
+              <Text style={styles.successNote}>
+                تم إرسال طلبك بنجاح! سنتواصل معك قريباً
+              </Text>
+            ) : null}
+
+            <View style={{ height: 40 }} />
+          </ScrollView>
+        </KeyboardAvoidingView>
       </SafeAreaView>
     </>
   );
 }
 
+const font = Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined });
+
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.bg },
-  pad: { padding: spacing.md, paddingBottom: 40 },
-  hero: {
-    borderRadius: radii.xl,
-    padding: spacing.lg,
-    marginBottom: spacing.lg,
-    ...shadows.card,
-  },
+  screen: { flex: 1, backgroundColor: BG },
+  flex: { flex: 1 },
+  scroll: { padding: spacing.md, paddingBottom: 48 },
   heroTitle: {
-    color: colors.white,
-    fontSize: 24,
+    color: "#fff",
+    fontSize: 22,
     fontWeight: "800",
     textAlign: "right",
+    fontFamily: font,
   },
   heroSub: {
-    color: "rgba(255,255,255,0.9)",
-    marginTop: 8,
+    color: colors.textSecondary,
     textAlign: "right",
+    marginTop: 8,
     lineHeight: 22,
-    fontSize: 15,
+    marginBottom: spacing.lg,
+    fontFamily: font,
+  },
+  sectionTitle: {
+    color: GOLD,
+    fontSize: 17,
+    fontWeight: "800",
+    textAlign: "right",
+    marginBottom: 12,
+    fontFamily: font,
   },
   pkg: {
     backgroundColor: colors.surface,
@@ -180,37 +391,28 @@ const styles = StyleSheet.create({
     ...shadows.soft,
   },
   pkgOn: {
-    borderColor: colors.gold,
-    backgroundColor: colors.goldMuted,
+    borderColor: GREEN,
+    backgroundColor: "rgba(26,122,60,0.18)",
   },
   pkgTop: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
+    gap: 12,
   },
   pkgTitle: {
-    color: colors.white,
-    fontSize: 18,
+    color: "#fff",
+    fontSize: 17,
     fontWeight: "800",
     textAlign: "right",
     flex: 1,
+    fontFamily: font,
   },
-  priceTag: {
-    flexDirection: "row",
-    alignItems: "baseline",
-    gap: 4,
-    backgroundColor: colors.brandMuted,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: radii.md,
-  },
-  priceVal: { color: colors.gold, fontWeight: "800", fontSize: 18 },
-  priceCur: { color: colors.gold, fontSize: 12, fontWeight: "600" },
-  pkgUnit: {
-    color: colors.textSecondary,
-    textAlign: "right",
-    marginTop: 6,
-    fontSize: 14,
+  priceGold: {
+    color: GOLD,
+    fontWeight: "800",
+    fontSize: 15,
+    fontFamily: font,
   },
   pkgDetail: {
     color: colors.textMuted,
@@ -218,54 +420,110 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontSize: 13,
     lineHeight: 20,
+    fontFamily: font,
   },
-  sectionTitle: {
-    color: colors.white,
-    fontSize: 18,
-    fontWeight: "800",
-    textAlign: "right",
-    marginTop: spacing.lg,
-    marginBottom: spacing.sm,
-  },
+  formBlock: { marginTop: spacing.md },
   label: {
     color: colors.textSecondary,
     textAlign: "right",
     marginBottom: 6,
     fontSize: 13,
     fontWeight: "600",
+    fontFamily: font,
   },
   input: {
     backgroundColor: colors.surface,
     borderRadius: radii.md,
     borderWidth: 1,
     borderColor: colors.border,
-    color: colors.white,
+    color: "#fff",
     padding: 14,
     textAlign: "right",
     marginBottom: spacing.md,
     fontSize: 16,
+    fontFamily: font,
   },
   inputMulti: { minHeight: 88, textAlignVertical: "top" },
-  bookBtn: {
+  payRow: { flexDirection: "row", gap: 10, marginBottom: spacing.md },
+  payBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: "center",
+    backgroundColor: colors.surface,
+  },
+  payBtnOn: {
+    borderColor: GREEN,
+    backgroundColor: "rgba(26,122,60,0.25)",
+  },
+  payBtnText: {
+    color: colors.textSecondary,
+    fontWeight: "700",
+    fontSize: 14,
+    fontFamily: font,
+  },
+  payBtnTextOn: { color: "#fff" },
+  err: {
+    color: colors.red400,
+    textAlign: "center",
+    marginBottom: 12,
+    fontFamily: font,
+  },
+  submitBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 10,
-    backgroundColor: colors.brand,
+    gap: 8,
+    backgroundColor: GREEN,
     paddingVertical: 16,
     borderRadius: radii.lg,
     marginTop: spacing.sm,
     ...shadows.soft,
   },
-  bookBtnText: { color: colors.white, fontWeight: "800", fontSize: 17 },
-  aiBtn: {
-    marginTop: spacing.md,
-    paddingVertical: 16,
+  submitText: { color: "#fff", fontWeight: "800", fontSize: 17, fontFamily: font },
+  callBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    marginTop: spacing.lg,
+    paddingVertical: 14,
     borderRadius: radii.lg,
     borderWidth: 1,
-    borderColor: colors.gold,
+    borderColor: GOLD,
+    backgroundColor: "rgba(201,168,76,0.12)",
+  },
+  callText: {
+    color: GOLD,
+    fontWeight: "800",
+    fontSize: 16,
+    fontFamily: font,
+  },
+  cancelLink: {
+    color: colors.red400,
+    textAlign: "center",
+    marginTop: 16,
+    textDecorationLine: "underline",
+    fontWeight: "600",
+    fontFamily: font,
+  },
+  aiBtn: {
+    marginTop: spacing.md,
+    paddingVertical: 14,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: GOLD,
     backgroundColor: colors.goldMuted,
     alignItems: "center",
   },
-  aiBtnText: { color: colors.gold, fontWeight: "800", fontSize: 16 },
+  aiBtnText: { color: GOLD, fontWeight: "800", fontSize: 15, fontFamily: font },
+  successNote: {
+    color: GOLD,
+    textAlign: "center",
+    marginTop: spacing.md,
+    fontWeight: "700",
+    fontFamily: font,
+  },
 });

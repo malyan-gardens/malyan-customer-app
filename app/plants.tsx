@@ -85,7 +85,7 @@ export default function PlantsScreen() {
   if (loading) {
     return (
       <>
-        <Stack.Screen options={{ title: "النباتات الاصطناعية" }} />
+        <Stack.Screen options={{ title: "المنتجات" }} />
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={colors.gold} />
         </View>
@@ -95,7 +95,7 @@ export default function PlantsScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: "النباتات الاصطناعية" }} />
+      <Stack.Screen options={{ title: "المنتجات" }} />
       <SafeAreaView style={styles.screen} edges={["bottom"]}>
         <View style={styles.toolbar}>
           <Pressable

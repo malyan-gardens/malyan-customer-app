@@ -45,7 +45,7 @@ export default function SplashScreen() {
     >
       <Animated.View style={{ opacity: fade, transform: [{ scale }] }}>
         <MalyanLogo size="lg" />
-        <Text style={styles.tagline}>نباتات اصطناعية فاخرة في قطر</Text>
+        <Text style={styles.tagline}>منتجات فاخرة في قطر — مليان للحدائق</Text>
       </Animated.View>
       <View style={styles.footer}>
         <Text style={styles.footerHint}>جاري التحميل…</Text>

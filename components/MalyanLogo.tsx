@@ -22,7 +22,7 @@ export function MalyanLogo({
         </View>
         <View>
           <Text style={[styles.wordmark, size === "lg" && styles.wordmarkLg]}>
-            مليان
+            مليان للحدائق
           </Text>
           <View style={styles.goldLine} />
         </View>
@@ -53,11 +53,12 @@ const styles = StyleSheet.create({
   },
   wordmark: {
     color: colors.white,
-    fontSize: 32,
+    fontSize: 26,
     fontWeight: "800",
     letterSpacing: 0.5,
+    textAlign: "center",
   },
-  wordmarkLg: { fontSize: 40 },
+  wordmarkLg: { fontSize: 32 },
   goldLine: {
     height: 3,
     width: "100%",

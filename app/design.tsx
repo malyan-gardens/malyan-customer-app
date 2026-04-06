@@ -40,7 +40,7 @@ export default function DesignScreen() {
         >
           <Text style={styles.introTitle}>معرض أعمالنا</Text>
           <Text style={styles.introSub}>
-            مشاريع اختارت ماليان للأناقة والاستدامة البصرية
+            مشاريع اختارت مليان للأناقة والاستدامة البصرية
           </Text>
 
           <View style={styles.gallery}>
@@ -75,7 +75,7 @@ export default function DesignScreen() {
                 params: {
                   from: "design",
                   initialContext:
-                    "أنا مصمم الديكور الذكي لمليان. أخبرني عن مساحتك (المساحة بالمتر، الميزانية، النمط المفضل) وسأقترح لك أفضل النباتات والتصميم.",
+                    "أنا مصمم الديكور الذكي لمليان للحدائق. أخبرني عن مساحتك (المساحة بالمتر، الميزانية، النمط المفضل) وسأقترح لك أفضل المنتجات والتصميم.",
                 },
               })
             }
