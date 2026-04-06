@@ -66,7 +66,7 @@ export default function MaintenanceScreen() {
   const [scheduledDate, setScheduledDate] = useState("");
   const [scheduledTime, setScheduledTime] = useState("");
   const [notes, setNotes] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState<"online" | "cash">("cash");
+  const [paymentMethod, setPaymentMethod] = useState<"electronic" | "cash">("cash");
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [lastRequestId, setLastRequestId] = useState<string | null>(null);
@@ -101,7 +101,7 @@ export default function MaintenanceScreen() {
       scheduled_date: scheduledDate.trim(),
       scheduled_time: scheduledTime.trim(),
       notes: notes.trim() || null,
-      payment_method: paymentMethod === "online" ? "online" : "cash",
+      payment_method: paymentMethod === "electronic" ? "electronic" : "cash",
       status: "pending",
       total_amount: selected.totalAmount,
     };
@@ -258,17 +258,17 @@ export default function MaintenanceScreen() {
                   <Pressable
                     style={[
                       styles.payBtn,
-                      paymentMethod === "online" && styles.payBtnOn,
+                      paymentMethod === "electronic" && styles.payBtnOn,
                     ]}
-                    onPress={() => setPaymentMethod("online")}
+                    onPress={() => setPaymentMethod("electronic")}
                   >
                     <Text
                       style={[
                         styles.payBtnText,
-                        paymentMethod === "online" && styles.payBtnTextOn,
+                        paymentMethod === "electronic" && styles.payBtnTextOn,
                       ]}
                     >
-                      دفع أونلاين
+                      دفع إلكتروني
                     </Text>
                   </Pressable>
                   <Pressable
@@ -284,7 +284,7 @@ export default function MaintenanceScreen() {
                         paymentMethod === "cash" && styles.payBtnTextOn,
                       ]}
                     >
-                      كاش عند الزيارة
+                      نقداً
                     </Text>
                   </Pressable>
                 </View>
