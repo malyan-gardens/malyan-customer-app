@@ -1,9 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Stack, useRouter } from "expo-router";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
+  Alert,
   Platform,
   Pressable,
   ScrollView,
@@ -16,32 +16,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { cartTotal, useCartStore, type CartLine } from "../store/cartStore";
 import { colors, radii, shadows, spacing } from "../lib/theme";
 import { supabase } from "../lib/supabase";
-
-const TIME_SLOTS: { id: string; label: string }[] = [
-  { id: "morning", label: "صباحاً 9:00 - 12:00" },
-  { id: "noon", label: "ظهراً 12:00 - 15:00" },
-  { id: "afternoon", label: "مساءً 15:00 - 18:00" },
-  { id: "evening", label: "مساءً 18:00 - 21:00" },
-];
-
-function nextSevenDaysExcludingFriday(): { iso: string; label: string }[] {
-  const out: { iso: string; label: string }[] = [];
-  const start = new Date();
-  start.setHours(12, 0, 0, 0);
-  for (let add = 0; add < 21 && out.length < 7; add++) {
-    const d = new Date(start);
-    d.setDate(start.getDate() + add);
-    if (d.getDay() === 5) continue;
-    const iso = d.toISOString().slice(0, 10);
-    const label = d.toLocaleDateString("ar-QA", {
-      weekday: "long",
-      day: "numeric",
-      month: "long",
-    });
-    out.push({ iso, label });
-  }
-  return out;
-}
 
 function serializeItems(items: CartLine[]) {
   return items.map((i) => ({
@@ -56,24 +30,35 @@ function serializeItems(items: CartLine[]) {
 
 export default function CheckoutScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{
+    productId?: string;
+    productName?: string;
+    productPrice?: string;
+    productCurrency?: string;
+  }>();
   const items = useCartStore((s) => s.items);
   const clear = useCartStore((s) => s.clear);
-  const total = cartTotal(items);
+  const directProduct = useMemo(() => {
+    if (!params.productId || !params.productName) return null;
+    return {
+      productId: String(params.productId),
+      name: String(params.productName),
+      nameAr: String(params.productName),
+      price: Number(params.productPrice ?? 0),
+      currency: String(params.productCurrency ?? "QAR"),
+      quantity: 1,
+    } as CartLine;
+  }, [params.productId, params.productName, params.productPrice, params.productCurrency]);
+
+  const orderItems = directProduct ? [directProduct] : items;
+  const total = cartTotal(orderItems);
 
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [notes, setNotes] = useState("");
-  const [payment, setPayment] = useState<"cash" | "online">("cash");
-  const [deliveryDate, setDeliveryDate] = useState<string | null>(
-    () => nextSevenDaysExcludingFriday()[0]?.iso ?? null
-  );
-  const [deliveryTime, setDeliveryTime] = useState<string | null>(
-    () => TIME_SLOTS[0]?.label ?? null
-  );
+  const [payment, setPayment] = useState<"cash" | "electronic">("cash");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const dateOptions = useMemo(() => nextSevenDaysExcludingFriday(), []);
 
   const submit = async () => {
     setError(null);
@@ -85,15 +70,7 @@ export default function CheckoutScreen() {
       setError("يرجى إدخال رقم الهاتف.");
       return;
     }
-    if (!deliveryDate) {
-      setError("اختر يوم التوصيل.");
-      return;
-    }
-    if (!deliveryTime) {
-      setError("اختر فترة التوصيل.");
-      return;
-    }
-    if (items.length === 0) {
+    if (orderItems.length === 0) {
       setError("السلة فارغة.");
       return;
     }
@@ -102,11 +79,11 @@ export default function CheckoutScreen() {
     const payload = {
       customer_name: customerName.trim(),
       customer_phone: customerPhone.trim(),
-      items: serializeItems(items),
+      items: serializeItems(orderItems),
       total_amount: Math.round(total * 100) / 100,
-      payment_method: payment === "cash" ? "cash" : "online",
-      delivery_date: deliveryDate,
-      delivery_time: deliveryTime,
+      payment_method: payment === "cash" ? "cash" : "electronic",
+      delivery_date: null,
+      delivery_time: null,
       notes: notes.trim() || null,
       status: "pending",
     };
@@ -119,12 +96,31 @@ export default function CheckoutScreen() {
       return;
     }
 
-    clear();
+    const productName = orderItems[0]?.nameAr ?? orderItems[0]?.name ?? "منتج";
+    await supabase.from("notifications").insert({
+      title: "طلب جديد",
+      body: `${customerName.trim()} - ${productName}`,
+      type: "order",
+    });
+
+    if (!directProduct) clear();
     setSubmitting(false);
-    router.replace("/order-success");
+    if (payment === "electronic") {
+      router.push({
+        pathname: "/payment-mock",
+        params: {
+          amount: String(Math.round(total * 100) / 100),
+          service: productName,
+        },
+      });
+      return;
+    }
+    Alert.alert("تم", "تم إرسال طلبك بنجاح! سنتواصل معك قريباً", [
+      { text: "حسناً", onPress: () => router.replace("/order-success") },
+    ]);
   };
 
-  if (items.length === 0) {
+  if (orderItems.length === 0) {
     return (
       <>
         <Stack.Screen options={{ title: "إتمام الطلب" }} />
@@ -143,11 +139,7 @@ export default function CheckoutScreen() {
   return (
     <>
       <Stack.Screen options={{ title: "إتمام الطلب" }} />
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={88}
-      >
+      <SafeAreaView style={styles.flex} edges={["bottom"]}>
         <ScrollView
           style={styles.scroll}
           contentContainerStyle={styles.pad}
@@ -155,7 +147,7 @@ export default function CheckoutScreen() {
           showsVerticalScrollIndicator={false}
         >
           <Text style={styles.sectionTitle}>ملخص الطلب</Text>
-          {items.map((line) => {
+          {orderItems.map((line) => {
             const title = line.nameAr ?? line.name;
             const lineTotal = line.price * line.quantity;
             return (
@@ -179,16 +171,18 @@ export default function CheckoutScreen() {
 
           <Text style={styles.sectionTitle}>طريقة الدفع</Text>
           <Pressable
-            style={[styles.payOption, styles.payDisabled]}
-            disabled
-            onPress={() => {}}
+            style={[styles.payOption, payment === "electronic" && styles.payOn]}
+            onPress={() => setPayment("electronic")}
           >
             <Text style={styles.payEmoji}>💳</Text>
             <View style={styles.payTextWrap}>
-              <Text style={styles.payTitleMuted}>الدفع أونلاين</Text>
-              <Text style={styles.payHint}>قريباً — غير متاح حالياً</Text>
+              <Text style={styles.payTitle}>دفع إلكتروني</Text>
             </View>
-            <Ionicons name="lock-closed-outline" size={20} color={colors.textMuted} />
+            {payment === "electronic" ? (
+              <Ionicons name="checkmark-circle" size={22} color={colors.gold} />
+            ) : (
+              <View style={styles.radioOff} />
+            )}
           </Pressable>
           <Pressable
             style={[styles.payOption, payment === "cash" && styles.payOn]}
@@ -196,8 +190,7 @@ export default function CheckoutScreen() {
           >
             <Text style={styles.payEmoji}>🤝</Text>
             <View style={styles.payTextWrap}>
-              <Text style={styles.payTitle}>الدفع عند الاستلام</Text>
-              <Text style={styles.paySub}>نقداً عند التوصيل</Text>
+              <Text style={styles.payTitle}>نقداً</Text>
             </View>
             {payment === "cash" ? (
               <Ionicons name="checkmark-circle" size={22} color={colors.gold} />
@@ -205,55 +198,6 @@ export default function CheckoutScreen() {
               <View style={styles.radioOff} />
             )}
           </Pressable>
-
-          <Text style={styles.sectionTitle}>يوم التوصيل</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View style={styles.dateChips}>
-              {dateOptions.map((d) => (
-                <Pressable
-                  key={d.iso}
-                  onPress={() => setDeliveryDate(d.iso)}
-                  style={[
-                    styles.dateChip,
-                    deliveryDate === d.iso && styles.dateChipOn,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.dateChipText,
-                      deliveryDate === d.iso && styles.dateChipTextOn,
-                    ]}
-                  >
-                    {d.label}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </ScrollView>
-
-          <Text style={styles.sectionTitle}>وقت التوصيل</Text>
-          {TIME_SLOTS.map((slot) => (
-            <Pressable
-              key={slot.id}
-              onPress={() => setDeliveryTime(slot.label)}
-              style={[
-                styles.slotRow,
-                deliveryTime === slot.label && styles.slotRowOn,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.slotText,
-                  deliveryTime === slot.label && styles.slotTextOn,
-                ]}
-              >
-                {slot.label}
-              </Text>
-              {deliveryTime === slot.label ? (
-                <Ionicons name="checkmark-circle" size={20} color={colors.gold} />
-              ) : null}
-            </Pressable>
-          ))}
 
           <Text style={styles.sectionTitle}>بيانات التواصل</Text>
           <Text style={styles.label}>الاسم</Text>
@@ -301,7 +245,7 @@ export default function CheckoutScreen() {
             )}
           </Pressable>
         </ScrollView>
-      </KeyboardAvoidingView>
+      </SafeAreaView>
     </>
   );
 }
@@ -382,34 +326,6 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.border,
   },
-  dateChips: { flexDirection: "row", gap: 10, paddingVertical: 4, marginBottom: 8 },
-  dateChip: {
-    maxWidth: 200,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  dateChipOn: { borderColor: colors.gold, backgroundColor: colors.goldMuted },
-  dateChipText: { color: colors.textSecondary, fontSize: 13, textAlign: "center" },
-  dateChipTextOn: { color: colors.white, fontWeight: "700" },
-  slotRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 14,
-    paddingHorizontal: 14,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: 8,
-    backgroundColor: colors.surface,
-  },
-  slotRowOn: { borderColor: colors.gold, backgroundColor: colors.goldMuted },
-  slotText: { color: colors.textSecondary, fontSize: 15, textAlign: "right", flex: 1 },
-  slotTextOn: { color: colors.white, fontWeight: "700" },
   label: {
     color: colors.textSecondary,
     textAlign: "right",

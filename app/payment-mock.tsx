@@ -38,40 +38,15 @@ export default function PaymentMockScreen() {
   const [cvv, setCvv] = useState("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const confirmPayment = async () => {
-    setError(null);
-    if (cardNumber.replace(/\s/g, "").length !== 16) {
-      setError("يرجى إدخال رقم بطاقة صحيح.");
-      return;
-    }
-    if (!cardholderName.trim()) {
-      setError("يرجى إدخال اسم حامل البطاقة.");
-      return;
-    }
-    if (!/^\d{2}\/\d{2}$/.test(expiry)) {
-      setError("يرجى إدخال تاريخ انتهاء صالح بصيغة MM/YY.");
-      return;
-    }
-    if (!/^\d{3}$/.test(cvv)) {
-      setError("يرجى إدخال CVV مكون من 3 أرقام.");
-      return;
-    }
-
     setLoading(true);
     const body = `تم استلام ${amount} QAR مقابل ${service}`;
-    const { error: notifErr } = await supabase.from("notifications").insert({
+    await supabase.from("notifications").insert({
       title: "دفع إلكتروني ناجح",
       body,
       type: "order",
     });
-
-    if (notifErr) {
-      setError(notifErr.message);
-      setLoading(false);
-      return;
-    }
 
     setLoading(false);
     setSuccess(true);
@@ -145,8 +120,6 @@ export default function PaymentMockScreen() {
           </View>
         </View>
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-
         <Pressable style={styles.payBtn} onPress={() => void confirmPayment()} disabled={loading}>
           {loading ? (
             <ActivityIndicator color="#fff" />
@@ -192,7 +165,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   payText: { color: "#fff", fontWeight: "800", fontSize: 16, fontFamily: font },
-  error: { color: "#dc2626", textAlign: "center", marginTop: 10, fontFamily: font },
   successWrap: { flex: 1, alignItems: "center", justifyContent: "center" },
   successText: { marginTop: 14, color: "#15803d", fontSize: 24, fontWeight: "800", fontFamily: font },
 });

@@ -157,6 +157,23 @@ export default function HomeScreen() {
               <Ionicons name="add" size={18} color="#fff" />
               <Text style={styles.addMiniText}>أضف للسلة</Text>
             </Pressable>
+            <Pressable
+              onPress={() =>
+                router.push({
+                  pathname: "/checkout",
+                  params: {
+                    productId: item.id,
+                    productName: title,
+                    productPrice: String(item.selling_price ?? 0),
+                    productCurrency: item.currency ?? "QAR",
+                  },
+                })
+              }
+              style={({ pressed }) => [styles.buyNowBtn, pressed && { opacity: 0.9 }]}
+            >
+              <Ionicons name="flash" size={16} color={colors.bg} />
+              <Text style={styles.buyNowText}>اطلب الآن</Text>
+            </Pressable>
           </View>
         </View>
       );
@@ -510,6 +527,19 @@ const styles = StyleSheet.create({
     borderRadius: radii.sm,
   },
   addMiniText: { color: colors.white, fontWeight: "800", fontSize: 14 },
+  buyNowBtn: {
+    marginHorizontal: 12,
+    marginBottom: 12,
+    marginTop: 2,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: colors.gold,
+    paddingVertical: 10,
+    borderRadius: radii.sm,
+  },
+  buyNowText: { color: colors.bg, fontWeight: "800", fontSize: 14 },
   errorBox: {
     marginHorizontal: spacing.md,
     padding: spacing.lg,
