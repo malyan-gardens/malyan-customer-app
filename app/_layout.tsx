@@ -43,6 +43,7 @@ export default function RootLayout() {
           name="design"
           options={{ title: "تصميم المساحات" }}
         />
+        <Stack.Screen name="payment-mock" options={{ headerShown: false }} />
         <Stack.Screen name="checkout" options={{ title: "إتمام الطلب" }} />
         <Stack.Screen name="order-success" options={{ title: "تم بنجاح" }} />
       </Stack>

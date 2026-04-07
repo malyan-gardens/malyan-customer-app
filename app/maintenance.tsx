@@ -129,8 +129,20 @@ export default function MaintenanceScreen() {
     }
 
     setLastRequestId(insData?.id ?? null);
-    setSuccess(true);
     setSubmitting(false);
+
+    if (paymentMethod === "electronic") {
+      router.push({
+        pathname: "/payment-mock",
+        params: {
+          amount: String(selected.totalAmount ?? 0),
+          service: selected.name,
+        },
+      });
+      return;
+    }
+
+    setSuccess(true);
     Alert.alert("تم", "تم إرسال طلبك بنجاح! سنتواصل معك قريباً", [{ text: "حسناً" }]);
   };
 
