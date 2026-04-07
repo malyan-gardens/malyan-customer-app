@@ -41,6 +41,109 @@ export default function PaymentMockScreen() {
 
   const confirmPayment = async () => {
     setLoading(true);
+
+    const { data: userData } = await supabase.auth.getUser();
+    const user = userData.user;
+    const metadata = (user?.user_metadata ?? {}) as Record<string, unknown>;
+    const userName =
+      (typeof metadata.full_name === "string" && metadata.full_name) ||
+      (typeof metadata.name === "string" && metadata.name) ||
+      user?.email ||
+      "عميل مليان";
+    const userEmail = user?.email ?? "";
+    const today = new Date().toISOString().split("T")[0];
+
+    const { data: invoiceData } = await supabase
+      .from("invoices")
+      .insert({
+        invoice_number: "",
+        customer_name: userName,
+        customer_email: userEmail,
+        customer_phone: "",
+        customer_address: "Doha, Qatar",
+        items: [
+          {
+            description: service,
+            unit: "خدمة",
+            qty: 1,
+            rate: amount,
+            amount,
+          },
+        ],
+        subtotal: amount,
+        discount: 0,
+        previous_payments: 0,
+        partial_payment: 0,
+        total_amount: amount,
+        payment_method: "دفع إلكتروني",
+        payment_status: "paid",
+        issued_date: today,
+        due_date: today,
+        notes: "تم الدفع عبر بوابة QNB الإلكترونية",
+      })
+      .select("invoice_number")
+      .single();
+    const invoiceNumber = invoiceData?.invoice_number ?? "";
+
+    if (userEmail) {
+      await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer re_67gMYv8v_FJ2Kdcg4u22JaeXQNQMXGcii",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          from: "مليان للحدائق <onboarding@resend.dev>",
+          to: [userEmail],
+          subject: `فاتورة مليان للحدائق - ${invoiceNumber}`,
+          html: `
+      <div dir="rtl" style="font-family: Arial; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background: #1a7a3c; color: white; padding: 20px; text-align: center;">
+          <h1>مليان للتجارة والحدائق</h1>
+          <p>Malyan For Trading and Gardens</p>
+          <p>CR No: 189013 | Salwa Road HBK Building, Doha Qatar</p>
+        </div>
+        <div style="padding: 20px; border: 1px solid #ddd;">
+          <h2>فاتورة ضريبية</h2>
+          <p><strong>رقم الفاتورة:</strong> ${invoiceNumber}</p>
+          <p><strong>التاريخ:</strong> ${new Date().toLocaleDateString("ar-QA")}</p>
+          <p><strong>العميل:</strong> ${userName}</p>
+          <p><strong>الإيميل:</strong> ${userEmail}</p>
+          <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
+            <tr style="background: #1a7a3c; color: white;">
+              <th style="padding: 10px; border: 1px solid #ddd;">الوصف</th>
+              <th style="padding: 10px; border: 1px solid #ddd;">الكمية</th>
+              <th style="padding: 10px; border: 1px solid #ddd;">السعر</th>
+              <th style="padding: 10px; border: 1px solid #ddd;">الإجمالي</th>
+            </tr>
+            <tr>
+              <td style="padding: 10px; border: 1px solid #ddd;">${service}</td>
+              <td style="padding: 10px; border: 1px solid #ddd;">1</td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${amount} QAR</td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${amount} QAR</td>
+            </tr>
+          </table>
+          <div style="text-align: left; margin-top: 20px;">
+            <p><strong>الإجمالي: ${amount} QAR</strong></p>
+            <p style="color: green;"><strong>✅ تم الدفع</strong></p>
+          </div>
+          <div style="margin-top: 20px; padding: 15px; background: #f5f5f5;">
+            <p><strong>تفاصيل البنك:</strong></p>
+            <p>Qatar National Bank (QNB)</p>
+            <p>Account: 0260-572537-001</p>
+            <p>IBAN: QA82QNBA000000000260572537001</p>
+          </div>
+        </div>
+        <div style="text-align: center; margin-top: 20px; color: #666;">
+          <p>شكراً لثقتكم بمليان للتجارة والحدائق</p>
+          <p>+974 31252262 | Info@Malyangardens.com | www.malyangardens.com</p>
+        </div>
+      </div>
+    `,
+        }),
+      });
+    }
+
     const body = `تم استلام ${amount} QAR مقابل ${service}`;
     await supabase.from("notifications").insert({
       title: "دفع إلكتروني ناجح",
