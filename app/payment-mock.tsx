@@ -42,61 +42,74 @@ export default function PaymentMockScreen() {
   const confirmPayment = async () => {
     setLoading(true);
 
-    const { data: userData } = await supabase.auth.getUser();
-    const user = userData.user;
-    const metadata = (user?.user_metadata ?? {}) as Record<string, unknown>;
-    const userName =
-      (typeof metadata.full_name === "string" && metadata.full_name) ||
-      (typeof metadata.name === "string" && metadata.name) ||
-      user?.email ||
-      "عميل مليان";
-    const userEmail = user?.email ?? "";
+    let userName = "عميل مليان";
+    let userEmail = "";
+    let invoiceNumber = "";
     const today = new Date().toISOString().split("T")[0];
 
-    const { data: invoiceData } = await supabase
-      .from("invoices")
-      .insert({
-        invoice_number: "",
-        customer_name: userName,
-        customer_email: userEmail,
-        customer_phone: "",
-        customer_address: "Doha, Qatar",
-        items: [
-          {
-            description: service,
-            unit: "خدمة",
-            qty: 1,
-            rate: amount,
-            amount,
-          },
-        ],
-        subtotal: amount,
-        discount: 0,
-        previous_payments: 0,
-        partial_payment: 0,
-        total_amount: amount,
-        payment_method: "دفع إلكتروني",
-        payment_status: "paid",
-        issued_date: today,
-        due_date: today,
-        notes: "تم الدفع عبر بوابة QNB الإلكترونية",
-      })
-      .select("invoice_number")
-      .single();
-    const invoiceNumber = invoiceData?.invoice_number ?? "";
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      const user = userData.user;
+      const metadata = (user?.user_metadata ?? {}) as Record<string, unknown>;
+      userName =
+        (typeof metadata.full_name === "string" && metadata.full_name) ||
+        (typeof metadata.name === "string" && metadata.name) ||
+        user?.email ||
+        "عميل مليان";
+      userEmail = user?.email ?? "";
+    } catch (e) {
+      console.log(e);
+    }
 
-    if (userEmail) {
-      await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: {
-          Authorization: "Bearer re_67gMYv8v_FJ2Kdcg4u22JaeXQNQMXGcii",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          from: "مليان للحدائق <onboarding@resend.dev>",
-          to: [userEmail],
-          subject: `فاتورة مليان للحدائق - ${invoiceNumber}`,
-          html: `
+    try {
+      const { data: invoiceData } = await supabase
+        .from("invoices")
+        .insert({
+          invoice_number: "",
+          customer_name: userName,
+          customer_email: userEmail,
+          customer_phone: "",
+          customer_address: "Doha, Qatar",
+          items: [
+            {
+              description: service,
+              unit: "خدمة",
+              qty: 1,
+              rate: amount,
+              amount,
+            },
+          ],
+          subtotal: amount,
+          discount: 0,
+          previous_payments: 0,
+          partial_payment: 0,
+          total_amount: amount,
+          payment_method: "دفع إلكتروني",
+          payment_status: "paid",
+          issued_date: today,
+          due_date: today,
+          notes: "تم الدفع عبر بوابة QNB الإلكترونية",
+        })
+        .select("invoice_number")
+        .single();
+      invoiceNumber = invoiceData?.invoice_number ?? "";
+    } catch (e) {
+      console.log(e);
+    }
+
+    try {
+      if (userEmail) {
+        await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: {
+            Authorization: "Bearer re_67gMYv8v_FJ2Kdcg4u22JaeXQNQMXGcii",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            from: "مليان للحدائق <onboarding@resend.dev>",
+            to: [userEmail],
+            subject: `فاتورة مليان للحدائق - ${invoiceNumber}`,
+            html: `
       <div dir="rtl" style="font-family: Arial; max-width: 600px; margin: 0 auto; padding: 20px;">
         <div style="background: #1a7a3c; color: white; padding: 20px; text-align: center;">
           <h1>مليان للتجارة والحدائق</h1>
@@ -140,16 +153,23 @@ export default function PaymentMockScreen() {
         </div>
       </div>
     `,
-        }),
-      });
+          }),
+        });
+      }
+    } catch (e) {
+      console.log(e);
     }
 
-    const body = `تم استلام ${amount} QAR مقابل ${service}`;
-    await supabase.from("notifications").insert({
-      title: "دفع إلكتروني ناجح",
-      body,
-      type: "order",
-    });
+    try {
+      const body = `تم استلام ${amount} QAR مقابل ${service}`;
+      await supabase.from("notifications").insert({
+        title: "دفع إلكتروني ناجح",
+        body,
+        type: "order",
+      });
+    } catch (e) {
+      console.log(e);
+    }
 
     setLoading(false);
     setSuccess(true);
