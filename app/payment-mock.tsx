@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Platform,
@@ -42,6 +42,7 @@ export default function PaymentMockScreen() {
   const [userEmail, setUserEmail] = useState("");
   const [issuedDate, setIssuedDate] = useState("");
   const [invoiceRow, setInvoiceRow] = useState<Record<string, any> | null>(null);
+  const emailSentRef = useRef(false);
 
   useEffect(() => {
     if (Platform.OS !== "web" || typeof document === "undefined") return;
@@ -115,6 +116,7 @@ export default function PaymentMockScreen() {
 
   const confirmPayment = async () => {
     setLoading(true);
+    emailSentRef.current = false;
 
     let nextUserName = "عميل مليان";
     let nextUserEmail = "";
@@ -173,6 +175,12 @@ export default function PaymentMockScreen() {
 
     try {
       if (nextUserEmail) {
+        if (emailSentRef.current) {
+          setLoading(false);
+          setSuccess(true);
+          return;
+        }
+        emailSentRef.current = true;
         const { data: latestInvoice } = await supabase
           .from("invoices")
           .select("*")
