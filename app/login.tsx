@@ -11,7 +11,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -22,22 +21,11 @@ WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen() {
   const router = useRouter();
-  const [showPhoneOtp, setShowPhoneOtp] = useState(false);
-  const [phone, setPhone] = useState("+974");
-  const [otp, setOtp] = useState("");
-  const [sendingOtp, setSendingOtp] = useState(false);
-  const [verifyingOtp, setVerifyingOtp] = useState(false);
   const [providerLoading, setProviderLoading] = useState<null | "google" | "apple">(
     null
   );
   const [error, setError] = useState<string | null>(null);
   const redirectTo = makeRedirectUri({ path: "auth/callback" });
-
-  const normalizePhone = (raw: string) => {
-    const digits = raw.replace(/\D/g, "");
-    const withCountry = digits.startsWith("974") ? digits : `974${digits}`;
-    return `+${withCountry.slice(0, 11)}`;
-  };
 
   const oauthLogin = async (provider: "google" | "apple") => {
     try {
@@ -72,47 +60,6 @@ export default function LoginScreen() {
       setError(e instanceof Error ? e.message : "تعذر تسجيل الدخول.");
     } finally {
       setProviderLoading(null);
-    }
-  };
-
-  const submitPhone = async () => {
-    try {
-      setError(null);
-      const normalized = normalizePhone(phone);
-      if (!/^\+974\d{8}$/.test(normalized)) {
-        setError("يرجى إدخال رقم صحيح بصيغة +974XXXXXXXX");
-        return;
-      }
-      setSendingOtp(true);
-      const { error: otpError } = await supabase.auth.signInWithOtp({ phone: normalized });
-      if (otpError) throw otpError;
-      setPhone(normalized);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "تعذر إرسال رمز OTP.");
-    } finally {
-      setSendingOtp(false);
-    }
-  };
-
-  const submitOtp = async () => {
-    try {
-      setError(null);
-      if (!/^\d{6}$/.test(otp)) {
-        setError("يرجى إدخال رمز مكوّن من 6 أرقام.");
-        return;
-      }
-      setVerifyingOtp(true);
-      const { error: verifyError } = await supabase.auth.verifyOtp({
-        phone: normalizePhone(phone),
-        token: otp,
-        type: "sms",
-      });
-      if (verifyError) throw verifyError;
-      router.replace("/(tabs)/home");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "فشل التحقق من الرمز.");
-    } finally {
-      setVerifyingOtp(false);
     }
   };
 
@@ -160,7 +107,7 @@ export default function LoginScreen() {
                 <Text style={styles.btnText}>تسجيل بـ Apple</Text>
               </Pressable>
               <Pressable
-                onPress={() => setShowPhoneOtp((v) => !v)}
+                onPress={() => router.push("/phone-input")}
                 style={({ pressed }) => [
                   styles.btn,
                   styles.btnWhatsapp,
@@ -170,64 +117,6 @@ export default function LoginScreen() {
                 <Ionicons name="logo-whatsapp" size={22} color="#fff" />
                 <Text style={styles.btnText}>تسجيل برقم الواتساب</Text>
               </Pressable>
-
-              {showPhoneOtp ? (
-                <>
-                  <Text style={styles.hint}>أدخل رقم الجوال: +974XXXXXXXX</Text>
-                  <View style={styles.phoneRow}>
-                    <TextInput
-                      value={phone}
-                      onChangeText={(t) => setPhone(normalizePhone(t))}
-                      placeholder="+974XXXXXXXX"
-                      placeholderTextColor={colors.textMuted}
-                      keyboardType="phone-pad"
-                      style={styles.input}
-                      maxLength={12}
-                      textAlign="left"
-                    />
-                  </View>
-                  <Pressable
-                    onPress={() => void submitPhone()}
-                    style={({ pressed }) => [
-                      styles.btn,
-                      styles.btnWhatsapp,
-                      pressed && styles.pressed,
-                    ]}
-                    disabled={sendingOtp || verifyingOtp}
-                  >
-                    {sendingOtp ? (
-                      <ActivityIndicator color="#fff" />
-                    ) : (
-                      <Text style={styles.btnText}>إرسال رمز OTP</Text>
-                    )}
-                  </Pressable>
-                  <Text style={styles.hint}>أدخل رمز التحقق (6 أرقام)</Text>
-                  <TextInput
-                    value={otp}
-                    onChangeText={(t) => setOtp(t.replace(/\D/g, "").slice(0, 6))}
-                    placeholder="000000"
-                    placeholderTextColor={colors.textMuted}
-                    keyboardType="number-pad"
-                    style={styles.inputOtp}
-                    maxLength={6}
-                  />
-                  <Pressable
-                    onPress={() => void submitOtp()}
-                    style={({ pressed }) => [
-                      styles.btn,
-                      styles.btnWhatsapp,
-                      pressed && styles.pressed,
-                    ]}
-                    disabled={sendingOtp || verifyingOtp}
-                  >
-                    {verifyingOtp ? (
-                      <ActivityIndicator color="#fff" />
-                    ) : (
-                      <Text style={styles.btnText}>تأكيد الرمز</Text>
-                    )}
-                  </Pressable>
-                </>
-              ) : null}
               {error ? <Text style={styles.errorText}>{error}</Text> : null}
             </View>
           </ScrollView>
@@ -270,13 +159,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
   },
-  hint: {
-    color: colors.textMuted,
-    fontSize: 13,
-    textAlign: "right",
-    marginBottom: spacing.sm,
-    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
-  },
   btn: {
     flexDirection: "row",
     alignItems: "center",
@@ -302,43 +184,6 @@ const styles = StyleSheet.create({
     fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
   },
   pressed: { opacity: 0.88 },
-  phoneRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    marginBottom: spacing.md,
-  },
-  prefix: {
-    color: colors.gold,
-    fontWeight: "700",
-    fontSize: 18,
-  },
-  input: {
-    flex: 1,
-    backgroundColor: colors.bgElevated,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    color: colors.white,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 18,
-    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
-  },
-  inputOtp: {
-    backgroundColor: colors.bgElevated,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    color: colors.white,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 24,
-    textAlign: "center",
-    letterSpacing: 8,
-    marginBottom: spacing.md,
-    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
-  },
   errorText: {
     color: colors.red400,
     textAlign: "center",
