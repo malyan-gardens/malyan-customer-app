@@ -34,6 +34,14 @@ function normalizePhone(raw: string, country: string) {
   return `${country}${local}`;
 }
 
+function formatQatarPhone(raw: string) {
+  let digits = raw.replace(/\D/g, "");
+  if (digits.startsWith("974")) digits = digits.slice(3);
+  digits = digits.replace(/^0+/, "");
+  const localDigits = digits.slice(0, 9);
+  return `+974${localDigits}`;
+}
+
 async function checkAndIncrementRateLimit(phone: string) {
   const now = new Date();
   const windowStart = new Date(now.getTime() - WINDOW_HOURS * 60 * 60 * 1000).toISOString();
@@ -83,24 +91,30 @@ export default function PhoneInputScreen() {
 
   const sendOtp = async () => {
     setError(null);
-    const phone = normalizePhone(phoneLocal, country.dial);
-    if (!/^\+\d{8,15}$/.test(phone)) {
-      setError("يرجى إدخال رقم صحيح.");
+    const fullPhoneNumber = formatQatarPhone(phoneLocal);
+    if (!/^\+974\d{8,9}$/.test(fullPhoneNumber)) {
+      setError("يرجى إدخال رقم صحيح بصيغة +974XXXXXXXXX");
       return;
     }
 
     setSending(true);
     try {
-      const rate = await checkAndIncrementRateLimit(phone);
+      const rate = await checkAndIncrementRateLimit(fullPhoneNumber);
       if (!rate.allowed) {
         setError(rate.message);
         return;
       }
 
-      const { error: otpError } = await supabase.auth.signInWithOtp({ phone });
-      if (otpError) throw otpError;
-      router.push({ pathname: "/otp-verify", params: { phone } });
+      console.log("Sending OTP to:", fullPhoneNumber);
+      const { error: otpError } = await supabase.auth.signInWithOtp({ phone: fullPhoneNumber });
+      if (otpError) {
+        console.log("OTP Error:", otpError);
+        throw otpError;
+      }
+      console.log("OTP Success");
+      router.push({ pathname: "/otp-verify", params: { phone: fullPhoneNumber } });
     } catch (e) {
+      console.log("OTP Error:", e);
       setError(e instanceof Error ? e.message : "تعذر إرسال رمز التحقق.");
     } finally {
       setSending(false);

@@ -110,12 +110,12 @@ export default function LoginScreen() {
                 onPress={() => router.push("/phone-input")}
                 style={({ pressed }) => [
                   styles.btn,
-                  styles.btnWhatsapp,
+                  styles.btnPhone,
                   pressed && styles.pressed,
                 ]}
               >
-                <Ionicons name="logo-whatsapp" size={22} color="#fff" />
-                <Text style={styles.btnText}>تسجيل برقم الواتساب</Text>
+                <Ionicons name="call-outline" size={22} color="#fff" />
+                <Text style={styles.btnText}>تسجيل برقم الهاتف</Text>
               </Pressable>
               {error ? <Text style={styles.errorText}>{error}</Text> : null}
             </View>
@@ -170,7 +170,7 @@ const styles = StyleSheet.create({
   },
   btnGoogle: { backgroundColor: "#ffffff" },
   btnApple: { backgroundColor: "#000000" },
-  btnWhatsapp: { backgroundColor: "#25D366" },
+  btnPhone: { backgroundColor: "#1a7a3c" },
   btnText: {
     color: colors.white,
     fontWeight: "700",
