@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import * as Location from "expo-location";
 import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -55,10 +56,36 @@ export default function CheckoutScreen() {
 
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
+  const [deliveryAddress, setDeliveryAddress] = useState("");
   const [notes, setNotes] = useState("");
   const [payment, setPayment] = useState<"cash" | "electronic">("cash");
   const [submitting, setSubmitting] = useState(false);
+  const [detectingLocation, setDetectingLocation] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const detectLocation = async () => {
+    setDetectingLocation(true);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("تنبيه", "يرجى السماح بالوصول للموقع");
+        return;
+      }
+      const current = await Location.getCurrentPositionAsync({});
+      const [address] = await Location.reverseGeocodeAsync({
+        latitude: current.coords.latitude,
+        longitude: current.coords.longitude,
+      });
+      const fullAddress = [address?.street, address?.district, address?.city, address?.region]
+        .filter(Boolean)
+        .join(", ");
+      setDeliveryAddress(fullAddress || `${current.coords.latitude}, ${current.coords.longitude}`);
+    } catch (_e) {
+      Alert.alert("تنبيه", "تعذر تحديد الموقع، يرجى الإدخال يدوياً");
+    } finally {
+      setDetectingLocation(false);
+    }
+  };
 
   const submit = async () => {
     setError(null);
@@ -68,6 +95,10 @@ export default function CheckoutScreen() {
     }
     if (!customerPhone.trim()) {
       setError("يرجى إدخال رقم الهاتف.");
+      return;
+    }
+    if (!deliveryAddress.trim()) {
+      setError("يرجى إدخال عنوان التوصيل.");
       return;
     }
     if (orderItems.length === 0) {
@@ -82,7 +113,7 @@ export default function CheckoutScreen() {
       items: serializeItems(orderItems),
       total_amount: Math.round(total * 100) / 100,
       payment_method: payment === "cash" ? "cash" : "electronic",
-      delivery_date: null,
+      delivery_date: deliveryAddress.trim(),
       delivery_time: null,
       notes: notes.trim() || null,
       status: "pending",
@@ -217,6 +248,25 @@ export default function CheckoutScreen() {
             keyboardType="phone-pad"
             style={styles.input}
           />
+          <Text style={styles.label}>عنوان التوصيل</Text>
+          <View style={styles.locationRow}>
+            <Pressable
+              style={[styles.locationBtn, detectingLocation && styles.locationBtnDisabled]}
+              onPress={() => void detectLocation()}
+              disabled={detectingLocation}
+            >
+              <Text style={styles.locationBtnText}>
+                {detectingLocation ? "جارٍ التحديد..." : "📍 موقعي"}
+              </Text>
+            </Pressable>
+            <TextInput
+              value={deliveryAddress}
+              onChangeText={setDeliveryAddress}
+              placeholder="المنطقة، الشارع، المبنى…"
+              placeholderTextColor={colors.textMuted}
+              style={[styles.input, styles.locationInput]}
+            />
+          </View>
 
           <Text style={styles.label}>ملاحظات (اختياري)</Text>
           <TextInput
@@ -345,6 +395,24 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   inputMulti: { minHeight: 88, textAlignVertical: "top" },
+  locationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: spacing.md,
+  },
+  locationInput: { flex: 1, marginBottom: 0 },
+  locationBtn: {
+    backgroundColor: colors.brand,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 11,
+    minWidth: 88,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  locationBtnDisabled: { opacity: 0.8 },
+  locationBtnText: { color: colors.white, fontSize: 13, fontWeight: "700" },
   error: {
     color: colors.red400,
     textAlign: "center",

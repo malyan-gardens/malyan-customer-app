@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, useRouter } from "expo-router";
+import * as Location from "expo-location";
 import { useState } from "react";
 import {
   ActivityIndicator,
@@ -71,6 +72,31 @@ export default function MaintenanceScreen() {
   const [success, setSuccess] = useState(false);
   const [lastRequestId, setLastRequestId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [detectingLocation, setDetectingLocation] = useState(false);
+
+  const detectLocation = async () => {
+    setDetectingLocation(true);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("تنبيه", "يرجى السماح بالوصول للموقع");
+        return;
+      }
+      const current = await Location.getCurrentPositionAsync({});
+      const [address] = await Location.reverseGeocodeAsync({
+        latitude: current.coords.latitude,
+        longitude: current.coords.longitude,
+      });
+      const fullAddress = [address?.street, address?.district, address?.city, address?.region]
+        .filter(Boolean)
+        .join(", ");
+      setLocation(fullAddress || `${current.coords.latitude}, ${current.coords.longitude}`);
+    } catch (_e) {
+      Alert.alert("تنبيه", "تعذر تحديد الموقع، يرجى الإدخال يدوياً");
+    } finally {
+      setDetectingLocation(false);
+    }
+  };
 
   const submit = async () => {
     if (!selected) return;
@@ -232,13 +258,24 @@ export default function MaintenanceScreen() {
                   style={styles.input}
                 />
                 <Text style={styles.label}>العنوان / الموقع</Text>
-                <TextInput
-                  value={location}
-                  onChangeText={setLocation}
-                  placeholder="المنطقة، الشارع، المبنى…"
-                  placeholderTextColor={colors.textMuted}
-                  style={styles.input}
-                />
+                <View style={styles.locationRow}>
+                  <Pressable
+                    style={[styles.locationBtn, detectingLocation && styles.locationBtnDisabled]}
+                    onPress={() => void detectLocation()}
+                    disabled={detectingLocation}
+                  >
+                    <Text style={styles.locationBtnText}>
+                      {detectingLocation ? "جارٍ التحديد..." : "📍 موقعي"}
+                    </Text>
+                  </Pressable>
+                  <TextInput
+                    value={location}
+                    onChangeText={setLocation}
+                    placeholder="المنطقة، الشارع، المبنى…"
+                    placeholderTextColor={colors.textMuted}
+                    style={[styles.input, styles.locationInput]}
+                  />
+                </View>
                 <Text style={styles.label}>تاريخ الزيارة</Text>
                 <TextInput
                   value={scheduledDate}
@@ -453,6 +490,29 @@ const styles = StyleSheet.create({
     textAlign: "right",
     marginBottom: spacing.md,
     fontSize: 16,
+    fontFamily: font,
+  },
+  locationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: spacing.md,
+  },
+  locationInput: { flex: 1, marginBottom: 0 },
+  locationBtn: {
+    backgroundColor: GREEN,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 11,
+    minWidth: 88,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  locationBtnDisabled: { opacity: 0.8 },
+  locationBtnText: {
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: "700",
     fontFamily: font,
   },
   inputMulti: { minHeight: 88, textAlignVertical: "top" },

@@ -1,7 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { Stack, useRouter } from "expo-router";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import * as Location from "expo-location";
+import { useState } from "react";
+import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, radii, shadows, spacing } from "../lib/theme";
 
@@ -21,11 +23,39 @@ const SERVICES = [
 
 export default function DesignScreen() {
   const router = useRouter();
+  const [projectLocation, setProjectLocation] = useState("");
+  const [detectingLocation, setDetectingLocation] = useState(false);
+
+  const detectLocation = async () => {
+    setDetectingLocation(true);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("تنبيه", "يرجى السماح بالوصول للموقع");
+        return;
+      }
+      const current = await Location.getCurrentPositionAsync({});
+      const [address] = await Location.reverseGeocodeAsync({
+        latitude: current.coords.latitude,
+        longitude: current.coords.longitude,
+      });
+      const fullAddress = [address?.street, address?.district, address?.city, address?.region]
+        .filter(Boolean)
+        .join(", ");
+      setProjectLocation(fullAddress || `${current.coords.latitude}, ${current.coords.longitude}`);
+    } catch (_e) {
+      Alert.alert("تنبيه", "تعذر تحديد الموقع، يرجى الإدخال يدوياً");
+    } finally {
+      setDetectingLocation(false);
+    }
+  };
 
   const quote = () => {
     Alert.alert(
       "طلب عرض سعر",
-      "سيتم إرسال الطلب إلى لوحة تحكم الإدارة عند ربط Supabase.",
+      projectLocation.trim()
+        ? `تم استلام طلبك لموقع: ${projectLocation}`
+        : "سيتم إرسال الطلب إلى لوحة تحكم الإدارة عند ربط Supabase.",
       [{ text: "حسناً" }]
     );
   };
@@ -90,6 +120,26 @@ export default function DesignScreen() {
             <Ionicons name="send" size={20} color={colors.bg} />
             <Text style={styles.quoteBtnText}>طلب عرض سعر</Text>
           </Pressable>
+
+          <Text style={styles.sectionTitle}>موقع المشروع</Text>
+          <View style={styles.locationRow}>
+            <Pressable
+              style={[styles.locationBtn, detectingLocation && styles.locationBtnDisabled]}
+              onPress={() => void detectLocation()}
+              disabled={detectingLocation}
+            >
+              <Text style={styles.locationBtnText}>
+                {detectingLocation ? "جارٍ التحديد..." : "📍 موقعي"}
+              </Text>
+            </Pressable>
+            <TextInput
+              value={projectLocation}
+              onChangeText={setProjectLocation}
+              placeholder="المنطقة، الشارع، المبنى…"
+              placeholderTextColor={colors.textMuted}
+              style={styles.locationInput}
+            />
+          </View>
         </ScrollView>
       </SafeAreaView>
     </>
@@ -186,4 +236,32 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     fontSize: 17,
   },
+  locationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 12,
+  },
+  locationInput: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    color: colors.white,
+    padding: 12,
+    textAlign: "right",
+    fontSize: 15,
+  },
+  locationBtn: {
+    backgroundColor: colors.brand,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 11,
+    minWidth: 88,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  locationBtnDisabled: { opacity: 0.8 },
+  locationBtnText: { color: colors.white, fontSize: 13, fontWeight: "700" },
 });
