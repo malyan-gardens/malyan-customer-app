@@ -11,7 +11,7 @@ export default async function handler(req, res) {
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
-      Authorization: "Bearer re_67gMYv8v_FJ2Kdcg4u22JaeXQNQMXGcii",
+      Authorization: "Bearer re_BBUdK2xD_BDxK8CV6g8yhmjFVLEYqMTnh",
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
