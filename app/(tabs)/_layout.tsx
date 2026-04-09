@@ -26,10 +26,10 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="cart"
+        name="plants"
         options={{
-          title: "السلة",
-          tabBarLabel: "السلة",
+          title: "المنتجات",
+          tabBarLabel: "المنتجات",
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="cart" size={size} color={color} />
           ),
@@ -38,11 +38,17 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="assistant"
         options={{
-          title: "المساعد",
-          tabBarLabel: "المساعد",
+          title: "تواصل",
+          tabBarLabel: "تواصل",
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="chatbubbles" size={size} color={color} />
           ),
+        }}
+      />
+      <Tabs.Screen
+        name="cart"
+        options={{
+          href: null,
         }}
       />
       <Tabs.Screen

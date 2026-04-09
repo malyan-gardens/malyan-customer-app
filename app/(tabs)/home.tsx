@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
@@ -28,25 +28,49 @@ const GRID_GAP = 12;
 const GRID_H_PAD = spacing.md;
 const COL_WIDTH = (SCREEN_W - GRID_H_PAD * 2 - GRID_GAP) / 2;
 const PRODUCT_IMAGE_H = 180;
+const BANNER_H = 200;
 
-const HERO_W = SCREEN_W;
-const HERO_SLIDES = [
+const HERO_W = SCREEN_W - spacing.md * 2;
+type BannerSlide = {
+  key: string;
+  title: string;
+  sub: string;
+  discount?: string | null;
+  endDate?: string | null;
+  colors: readonly [string, string, string];
+};
+
+type PromotionRow = {
+  id: string;
+  title?: string | null;
+  description?: string | null;
+  discount_info?: string | null;
+  end_date?: string | null;
+};
+
+const DEFAULT_BANNERS: BannerSlide[] = [
   {
-    key: "1",
-    title: "أناقة دائمة",
-    sub: "منتجات فاخرة بجودة عالية",
+    key: "d1",
+    title: "🌿 نباتات صناعية فاخرة",
+    sub: "أجمل النباتات لمنزلك ومكتبك",
+    discount: null,
+    endDate: null,
     colors: ["#145e2f", "#1a7a3c", "#0a0a0a"] as const,
   },
   {
-    key: "2",
-    title: "صيانة احترافية",
-    sub: "نحافظ على مساحتك على مدار العام",
+    key: "d2",
+    title: "🔧 خدمات صيانة متخصصة",
+    sub: "فريق متخصص لصيانة حدائقك",
+    discount: null,
+    endDate: null,
     colors: ["#063015", "#1a7a3c", "#111"] as const,
   },
   {
-    key: "3",
-    title: "تصميم يعكس ذوقك",
-    sub: "مكاتب، فنادق، منازل وحدائق",
+    key: "d3",
+    title: "🎨 تصميم مساحات خضراء",
+    sub: "نحول مساحتك لجنة خضراء",
+    discount: null,
+    endDate: null,
     colors: ["#1a7a3c", "#c9a84c33", "#0a0a0a"] as const,
   },
 ];
@@ -65,8 +89,10 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [promotions, setPromotions] = useState<BannerSlide[]>([]);
   const [search, setSearch] = useState("");
   const [heroIndex, setHeroIndex] = useState(0);
+  const heroRef = useRef<ScrollView>(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -81,6 +107,22 @@ export default function HomeScreen() {
     } else {
       setItems((data as InventoryRow[]) ?? []);
     }
+
+    const { data: promoData } = await supabase
+      .from("promotions")
+      .select("id,title,description,discount_info,end_date")
+      .eq("is_active", true)
+      .order("created_at", { ascending: false });
+    const mapped = ((promoData as PromotionRow[] | null) ?? []).map((p, i) => ({
+      key: p.id,
+      title: p.title?.trim() || `عرض خاص ${i + 1}`,
+      sub: p.description?.trim() || "استفد من أحدث عروض مليان للحدائق",
+      discount: p.discount_info ?? null,
+      endDate: p.end_date ?? null,
+      colors: ["#145e2f", "#1a7a3c", "#0a0a0a"] as const,
+    }));
+    setPromotions(mapped);
+
     setLoading(false);
     setRefreshing(false);
   }, []);
@@ -88,6 +130,20 @@ export default function HomeScreen() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const bannerSlides = promotions.length > 0 ? promotions : DEFAULT_BANNERS;
+
+  useEffect(() => {
+    if (bannerSlides.length <= 1) return;
+    const t = setInterval(() => {
+      setHeroIndex((prev) => {
+        const next = (prev + 1) % bannerSlides.length;
+        heroRef.current?.scrollTo({ x: next * HERO_W, animated: true });
+        return next;
+      });
+    }, 3000);
+    return () => clearInterval(t);
+  }, [bannerSlides.length]);
 
   const filteredFeatured = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -228,11 +284,12 @@ export default function HomeScreen() {
                 showsHorizontalScrollIndicator={false}
                 onMomentumScrollEnd={(e) => {
                   const i = Math.round(e.nativeEvent.contentOffset.x / HERO_W);
-                  if (i >= 0 && i < HERO_SLIDES.length) setHeroIndex(i);
+                  if (i >= 0 && i < bannerSlides.length) setHeroIndex(i);
                 }}
                 decelerationRate="fast"
+                ref={heroRef}
               >
-                {HERO_SLIDES.map((slide) => (
+                {bannerSlides.map((slide) => (
                   <LinearGradient
                     key={slide.key}
                     colors={[...slide.colors]}
@@ -242,11 +299,17 @@ export default function HomeScreen() {
                   >
                     <Text style={styles.heroTitle}>{slide.title}</Text>
                     <Text style={styles.heroSub}>{slide.sub}</Text>
+                    {slide.discount ? (
+                      <Text style={styles.heroDiscount}>{slide.discount}</Text>
+                    ) : null}
+                    {slide.endDate ? (
+                      <Text style={styles.heroEndDate}>ينتهي في: {slide.endDate}</Text>
+                    ) : null}
                   </LinearGradient>
                 ))}
               </ScrollView>
               <View style={styles.dots}>
-                {HERO_SLIDES.map((s, i) => (
+                {bannerSlides.map((s, i) => (
                   <View key={s.key} style={[styles.dot, i === heroIndex && styles.dotActive]} />
                 ))}
               </View>
@@ -352,11 +415,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  heroWrap: { marginBottom: spacing.md },
+  heroWrap: { marginBottom: spacing.md, paddingHorizontal: spacing.md },
   heroSlide: {
-    height: 180,
+    height: BANNER_H,
+    borderRadius: 16,
+    overflow: "hidden",
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xl,
+    paddingTop: spacing.lg,
     justifyContent: "center",
   },
   heroTitle: {
@@ -371,6 +436,19 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: "right",
     lineHeight: 22,
+  },
+  heroDiscount: {
+    color: colors.gold,
+    fontWeight: "800",
+    fontSize: 14,
+    textAlign: "right",
+    marginTop: 10,
+  },
+  heroEndDate: {
+    color: "rgba(255,255,255,0.9)",
+    fontSize: 12,
+    textAlign: "right",
+    marginTop: 4,
   },
   dots: {
     flexDirection: "row",
