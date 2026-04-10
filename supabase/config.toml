@@ -1,0 +1,8 @@
+# https://supabase.com/docs/guides/cli/config
+# Phone OTP flow runs before the user has a JWT — disable JWT verification for these functions.
+
+[functions.send-whatsapp-otp]
+verify_jwt = false
+
+[functions.verify-whatsapp-otp]
+verify_jwt = false

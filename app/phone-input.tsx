@@ -106,15 +106,19 @@ export default function PhoneInputScreen() {
       }
 
       console.log("Sending OTP (WhatsApp) to:", fullPhoneNumber);
-      const { error: otpError } = await supabase.auth.signInWithOtp({
-        phone: fullPhoneNumber,
-        options: { channel: "whatsapp" },
-      });
-      if (otpError) {
-        console.log("OTP Error:", otpError);
-        throw otpError;
+      const { data, error: fnError } = await supabase.functions.invoke(
+        "send-whatsapp-otp",
+        { body: { phone: fullPhoneNumber } }
+      );
+      if (fnError) {
+        console.log("send-whatsapp-otp:", fnError);
+        throw fnError;
       }
-      console.log("OTP Success");
+      const payload = data as { ok?: boolean; error?: string } | null;
+      if (!payload?.ok) {
+        throw new Error(payload?.error ?? "تعذر إرسال رمز التحقق.");
+      }
+      console.log("OTP sent via Twilio");
       router.push({ pathname: "/otp-verify", params: { phone: fullPhoneNumber } });
     } catch (e) {
       console.log("OTP Error:", e);

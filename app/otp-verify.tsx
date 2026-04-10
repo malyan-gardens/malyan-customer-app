@@ -47,12 +47,24 @@ export default function OtpVerifyScreen() {
     }
     setVerifying(true);
     try {
-      const { error: verifyError } = await supabase.auth.verifyOtp({
-        phone: phoneValue,
-        token: otp,
-        type: "sms",
+      const { data, error: fnError } = await supabase.functions.invoke(
+        "verify-whatsapp-otp",
+        { body: { phone: phoneValue, code: otp } }
+      );
+      if (fnError) throw fnError;
+      const payload = data as {
+        ok?: boolean;
+        error?: string;
+        session?: { access_token: string; refresh_token: string };
+      } | null;
+      if (!payload?.ok || !payload.session) {
+        throw new Error(payload?.error ?? "فشل التحقق من الرمز.");
+      }
+      const { error: sessionError } = await supabase.auth.setSession({
+        access_token: payload.session.access_token,
+        refresh_token: payload.session.refresh_token,
       });
-      if (verifyError) throw verifyError;
+      if (sessionError) throw sessionError;
       router.replace("/(tabs)/home");
     } catch (e) {
       setError(e instanceof Error ? e.message : "فشل التحقق من الرمز.");
@@ -66,11 +78,15 @@ export default function OtpVerifyScreen() {
     setResending(true);
     setError(null);
     try {
-      const { error: otpError } = await supabase.auth.signInWithOtp({
-        phone: phoneValue,
-        options: { channel: "whatsapp" },
-      });
-      if (otpError) throw otpError;
+      const { data, error: fnError } = await supabase.functions.invoke(
+        "send-whatsapp-otp",
+        { body: { phone: phoneValue } }
+      );
+      if (fnError) throw fnError;
+      const payload = data as { ok?: boolean; error?: string } | null;
+      if (!payload?.ok) {
+        throw new Error(payload?.error ?? "تعذر إعادة إرسال الرمز.");
+      }
       setSeconds(60);
     } catch (e) {
       setError(e instanceof Error ? e.message : "تعذر إعادة إرسال الرمز.");
