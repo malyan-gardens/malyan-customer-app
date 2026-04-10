@@ -5,6 +5,8 @@ import { I18nManager, Platform } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { colors } from "../lib/theme";
 
+/** Auth routing runs on `app/index.tsx` only — nothing here blocks the navigator. */
+
 export default function RootLayout() {
   useEffect(() => {
     I18nManager.allowRTL(true);

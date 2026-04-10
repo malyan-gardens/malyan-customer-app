@@ -1,15 +1,36 @@
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
-import { useEffect, useRef } from "react";
+import { useRootNavigationState, useRouter } from "expo-router";
+import { useCallback, useEffect, useRef } from "react";
 import { Animated, StyleSheet, Text, View } from "react-native";
 import { MalyanLogo } from "../components/MalyanLogo";
 import { supabase } from "../lib/supabase";
 import { colors } from "../lib/theme";
 
+const SESSION_RESOLVE_TIMEOUT_MS = 3000;
+const MIN_SPLASH_MS = 900;
+/** If the root navigator never mounts, still leave the splash (avoids infinite splash). */
+const NAV_READY_FALLBACK_MS = 5000;
+
 export default function SplashScreen() {
   const router = useRouter();
+  const rootNavigation = useRootNavigationState();
+  const didNavigate = useRef(false);
   const fade = useRef(new Animated.Value(0)).current;
   const scale = useRef(new Animated.Value(0.92)).current;
+
+  const go = useCallback(
+    (target: "home" | "login") => {
+      if (didNavigate.current) return;
+      didNavigate.current = true;
+      const href = target === "home" ? "/(tabs)/home" : "/login";
+      try {
+        router.replace(href as never);
+      } catch {
+        router.replace("/login" as never);
+      }
+    },
+    [router]
+  );
 
   useEffect(() => {
     Animated.parallel([
@@ -28,24 +49,47 @@ export default function SplashScreen() {
   }, [fade, scale]);
 
   useEffect(() => {
+    if (rootNavigation?.key) {
+      return;
+    }
+    const t = setTimeout(() => go("login"), NAV_READY_FALLBACK_MS);
+    return () => clearTimeout(t);
+  }, [go, rootNavigation?.key]);
+
+  useEffect(() => {
+    if (!rootNavigation?.key) {
+      return;
+    }
+
     let cancelled = false;
-    const minSplashMs = 900;
 
     const run = async () => {
-      const [{ data }] = await Promise.all([
-        supabase.auth.getSession(),
-        new Promise<void>((resolve) => setTimeout(resolve, minSplashMs)),
+      const sessionRace = Promise.race([
+        supabase.auth.getSession().catch(() => ({ data: { session: null } })),
+        new Promise<{ data: { session: null } }>((resolve) =>
+          setTimeout(
+            () => resolve({ data: { session: null } }),
+            SESSION_RESOLVE_TIMEOUT_MS
+          )
+        ),
       ]);
+
+      const [sessionOutcome] = await Promise.all([
+        sessionRace,
+        new Promise<void>((resolve) => setTimeout(resolve, MIN_SPLASH_MS)),
+      ]);
+
       if (cancelled) return;
-      if (data.session) router.replace("/(tabs)/home");
-      else router.replace("/login");
+
+      const session = sessionOutcome?.data?.session ?? null;
+      go(session ? "home" : "login");
     };
 
     void run();
     return () => {
       cancelled = true;
     };
-  }, [router]);
+  }, [go, rootNavigation?.key]);
 
   return (
     <LinearGradient
