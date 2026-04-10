@@ -105,8 +105,11 @@ export default function PhoneInputScreen() {
         return;
       }
 
-      console.log("Sending OTP to:", fullPhoneNumber);
-      const { error: otpError } = await supabase.auth.signInWithOtp({ phone: fullPhoneNumber });
+      console.log("Sending OTP (WhatsApp) to:", fullPhoneNumber);
+      const { error: otpError } = await supabase.auth.signInWithOtp({
+        phone: fullPhoneNumber,
+        options: { channel: "whatsapp" },
+      });
       if (otpError) {
         console.log("OTP Error:", otpError);
         throw otpError;
@@ -132,7 +135,7 @@ export default function PhoneInputScreen() {
           <ScrollView contentContainerStyle={styles.wrap} keyboardShouldPersistTaps="handled">
             <View style={styles.card}>
               <Text style={styles.title}>أدخل رقم الهاتف</Text>
-              <Text style={styles.sub}>سيتم إرسال رمز OTP عبر SMS</Text>
+              <Text style={styles.sub}>سيتم إرسال رمز التحقق عبر واتساب</Text>
 
               <Text style={styles.label}>رمز الدولة</Text>
               <Pressable style={styles.codePicker} onPress={() => setShowCodes((v) => !v)}>

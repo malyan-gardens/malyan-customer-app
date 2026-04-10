@@ -66,7 +66,10 @@ export default function OtpVerifyScreen() {
     setResending(true);
     setError(null);
     try {
-      const { error: otpError } = await supabase.auth.signInWithOtp({ phone: phoneValue });
+      const { error: otpError } = await supabase.auth.signInWithOtp({
+        phone: phoneValue,
+        options: { channel: "whatsapp" },
+      });
       if (otpError) throw otpError;
       setSeconds(60);
     } catch (e) {
@@ -87,7 +90,7 @@ export default function OtpVerifyScreen() {
           <View style={styles.wrap}>
             <View style={styles.card}>
               <Text style={styles.title}>أدخل رمز التحقق</Text>
-              <Text style={styles.sub}>تم إرسال الرمز إلى: {phoneValue}</Text>
+              <Text style={styles.sub}>تم إرسال الرمز عبر واتساب إلى: {phoneValue}</Text>
 
               <TextInput
                 ref={otpRef}
