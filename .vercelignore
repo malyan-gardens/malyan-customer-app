@@ -1,0 +1,16 @@
+# Local / secrets (env vars should be set in Vercel project settings)
+.env
+.env.*
+!.env.example
+
+# Not needed for Expo web static export
+dist/
+.expo/
+
+# Other apps in the monorepo — keep deploy upload focused on customer-app
+dashboard/
+driver-app/
+
+# Misc
+*.log
+.DS_Store
