@@ -13,6 +13,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { describeFunctionInvokeError } from "../lib/function-invoke-error";
 import { supabase } from "../lib/supabase";
 import { colors, radii, shadows, spacing } from "../lib/theme";
 
@@ -112,7 +113,7 @@ export default function PhoneInputScreen() {
       );
       if (fnError) {
         console.log("send-whatsapp-otp:", fnError);
-        throw fnError;
+        throw new Error(describeFunctionInvokeError(fnError));
       }
       const payload = data as { ok?: boolean; error?: string } | null;
       if (!payload?.ok) {
@@ -122,7 +123,7 @@ export default function PhoneInputScreen() {
       router.push({ pathname: "/otp-verify", params: { phone: fullPhoneNumber } });
     } catch (e) {
       console.log("OTP Error:", e);
-      setError(e instanceof Error ? e.message : "تعذر إرسال رمز التحقق.");
+      setError(e instanceof Error ? e.message : describeFunctionInvokeError(e));
     } finally {
       setSending(false);
     }

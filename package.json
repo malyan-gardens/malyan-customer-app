@@ -9,7 +9,13 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "build": "expo export --platform web"
+    "build": "expo export --platform web",
+    "supabase:version": "npx --yes supabase@latest --version",
+    "supabase:login": "npx --yes supabase@latest login",
+    "supabase:deploy:otp": "npx --yes supabase@latest functions deploy send-whatsapp-otp verify-whatsapp-otp --project-ref pjhvbtmceaesxyoutgbr",
+    "supabase:logs:send": "npx --yes supabase@latest functions logs send-whatsapp-otp --project-ref pjhvbtmceaesxyoutgbr",
+    "supabase:logs:verify": "npx --yes supabase@latest functions logs verify-whatsapp-otp --project-ref pjhvbtmceaesxyoutgbr",
+    "supabase:secrets:twilio": "echo Set TWILIO_* via Dashboard or: npx supabase@latest secrets set --project-ref pjhvbtmceaesxyoutgbr KEY=value"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",

@@ -11,6 +11,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { describeFunctionInvokeError } from "../lib/function-invoke-error";
 import { supabase } from "../lib/supabase";
 import { colors, radii, shadows, spacing } from "../lib/theme";
 
@@ -51,7 +52,7 @@ export default function OtpVerifyScreen() {
         "verify-whatsapp-otp",
         { body: { phone: phoneValue, code: otp } }
       );
-      if (fnError) throw fnError;
+      if (fnError) throw new Error(describeFunctionInvokeError(fnError));
       const payload = data as {
         ok?: boolean;
         error?: string;
@@ -82,7 +83,7 @@ export default function OtpVerifyScreen() {
         "send-whatsapp-otp",
         { body: { phone: phoneValue } }
       );
-      if (fnError) throw fnError;
+      if (fnError) throw new Error(describeFunctionInvokeError(fnError));
       const payload = data as { ok?: boolean; error?: string } | null;
       if (!payload?.ok) {
         throw new Error(payload?.error ?? "تعذر إعادة إرسال الرمز.");
