@@ -1,7 +1,7 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { useRootNavigationState, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef } from "react";
-import { Animated, StyleSheet, Text, View } from "react-native";
+import { Animated, Platform, StyleSheet, Text, View } from "react-native";
 import { MalyanLogo } from "../components/MalyanLogo";
 import { supabase } from "../lib/supabase";
 import { colors } from "../lib/theme";
@@ -49,6 +49,9 @@ export default function SplashScreen() {
   }, [fade, scale]);
 
   useEffect(() => {
+    if (Platform.OS === "web") {
+      return;
+    }
     if (rootNavigation?.key) {
       return;
     }
@@ -57,7 +60,8 @@ export default function SplashScreen() {
   }, [go, rootNavigation?.key]);
 
   useEffect(() => {
-    if (!rootNavigation?.key) {
+    const navReady = Platform.OS === "web" || Boolean(rootNavigation?.key);
+    if (!navReady) {
       return;
     }
 
