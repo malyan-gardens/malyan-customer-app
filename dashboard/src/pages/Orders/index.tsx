@@ -1,9 +1,20 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 
-type OrderStatus = 'pending' | 'processing' | 'delivered' | 'cancelled';
+type OrderStatus =
+  | 'pending'
+  | 'pending_cash'
+  | 'pending_payment'
+  | 'paid'
+  | 'processing'
+  | 'delivered'
+  | 'cancelled';
+
 const STATUS_LABEL: Record<OrderStatus, string> = {
   pending: 'معلق',
+  pending_cash: 'بانتظار الكاش',
+  pending_payment: 'بانتظار الدفع',
+  paid: 'مدفوع',
   processing: 'قيد التنفيذ',
   delivered: 'تم التوصيل',
   cancelled: 'ملغي',
@@ -11,6 +22,9 @@ const STATUS_LABEL: Record<OrderStatus, string> = {
 
 const STATUS_COLOR: Record<OrderStatus, string> = {
   pending: '#f59e0b',
+  pending_cash: '#f97316',
+  pending_payment: '#a855f7',
+  paid: '#22c55e',
   processing: '#3b82f6',
   delivered: '#22c55e',
   cancelled: '#ef4444',
@@ -119,6 +133,9 @@ type OrderRow = {
   notes: string | null;
   status: OrderStatus | string;
   created_at: string;
+  latitude: number | null;
+  longitude: number | null;
+  address: string | null;
 };
 
 export default function Orders() {
@@ -170,7 +187,7 @@ export default function Orders() {
     });
   }, [orders, statusFilter, dateFilter]);
 
-  async function updateOrderStatus(orderId: string, newStatus: OrderStatus) {
+  async function updateOrderStatus(orderId: string, newStatus: OrderStatus | string) {
     setUpdatingStatusId(orderId);
     setError(null);
     const { error: updateErr } = await supabase.from('orders').update({ status: newStatus }).eq('id', orderId);
@@ -183,7 +200,7 @@ export default function Orders() {
 
     const { error: notifErr } = await supabase.from('notifications').insert({
       title: 'تحديث حالة طلب',
-      message: `تم تغيير حالة الطلب إلى: ${STATUS_LABEL[newStatus]}`,
+      message: `تم تغيير حالة الطلب إلى: ${STATUS_LABEL[newStatus as OrderStatus] ?? newStatus}`,
       type: 'order',
       reference_id: orderId,
       reference_type: 'orders',

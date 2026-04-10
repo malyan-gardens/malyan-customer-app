@@ -11,7 +11,14 @@ import {
   TextInput,
   View,
 } from "react-native";
+import {
+  buildOrderInvoiceMessage,
+  openInvoiceWhatsAppToBusiness,
+  type SerializedOrderItem,
+} from "../lib/orderFlow";
 import { supabase } from "../lib/supabase";
+import { useCartStore } from "../store/cartStore";
+import { useCheckoutDraftStore } from "../store/checkoutDraftStore";
 
 const QNB_BLUE = "#003f7f";
 const font = Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined });
@@ -28,7 +35,11 @@ function formatExpiry(raw: string) {
 }
 
 export default function PaymentMockScreen() {
-  const params = useLocalSearchParams<{ amount?: string; service?: string }>();
+  const params = useLocalSearchParams<{
+    amount?: string;
+    service?: string;
+    orderId?: string;
+  }>();
   const amount = Number(params.amount ?? 0);
   const service = String(params.service ?? "خدمة صيانة");
 
@@ -117,6 +128,74 @@ export default function PaymentMockScreen() {
   const confirmPayment = async () => {
     setLoading(true);
     emailSentRef.current = false;
+
+    const orderIdRaw = params.orderId;
+    const orderIdStr =
+      typeof orderIdRaw === "string"
+        ? orderIdRaw
+        : Array.isArray(orderIdRaw)
+          ? orderIdRaw[0]
+          : "";
+
+    if (orderIdStr) {
+      try {
+        const { error: upErr } = await supabase
+          .from("orders")
+          .update({ status: "paid" })
+          .eq("id", orderIdStr);
+        if (upErr) throw upErr;
+
+        const { data: ord, error: fetchErr } = await supabase
+          .from("orders")
+          .select("*")
+          .eq("id", orderIdStr)
+          .single();
+        if (fetchErr) throw fetchErr;
+
+        const rawItems = Array.isArray(ord?.items) ? ord.items : [];
+        const itemsForMsg: SerializedOrderItem[] = rawItems.map((row: Record<string, unknown>) => ({
+          productId: String(row.productId ?? ""),
+          name: String(row.name ?? ""),
+          quantity: Number(row.quantity ?? 1),
+          unitPrice: Number(row.unitPrice ?? 0),
+          currency: String(row.currency ?? "QAR"),
+          lineTotal: Number(row.lineTotal ?? 0),
+        }));
+
+        const invoiceText = buildOrderInvoiceMessage({
+          orderId: orderIdStr,
+          customerName: String(ord?.customer_name ?? ""),
+          customerPhone: String(ord?.customer_phone ?? ""),
+          address: ord?.address != null ? String(ord.address) : null,
+          latitude: ord?.latitude != null ? Number(ord.latitude) : null,
+          longitude: ord?.longitude != null ? Number(ord.longitude) : null,
+          items: itemsForMsg,
+          total: Number(ord?.total_amount ?? amount),
+          paymentLabel: "الدفع أونلاين",
+          statusLine: "مدفوع — جاري تجهيز التوصيل",
+        });
+        await openInvoiceWhatsAppToBusiness(invoiceText);
+
+        await supabase.from("notifications").insert({
+          title: "تم دفع طلب أونلاين",
+          message: `طلب ${orderIdStr.slice(0, 8)} — ${Number(ord?.total_amount ?? amount)} QAR`,
+          body: `طلب ${orderIdStr}`,
+          type: "order",
+          reference_id: orderIdStr,
+          reference_type: "orders",
+          read: false,
+        });
+      } catch (e) {
+        console.log(e);
+      } finally {
+        const draft = useCheckoutDraftStore.getState();
+        if (!draft.fromDirectProduct) useCartStore.getState().clear();
+        useCheckoutDraftStore.getState().reset();
+        setLoading(false);
+        router.replace("/order-success");
+      }
+      return;
+    }
 
     let nextUserName = "عميل مليان";
     let nextUserEmail = "";

@@ -1,10 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import * as Location from "expo-location";
 import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Platform,
   Pressable,
   ScrollView,
@@ -15,19 +13,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { cartTotal, useCartStore, type CartLine } from "../store/cartStore";
+import { useCheckoutDraftStore } from "../store/checkoutDraftStore";
 import { colors, radii, shadows, spacing } from "../lib/theme";
-import { supabase } from "../lib/supabase";
-
-function serializeItems(items: CartLine[]) {
-  return items.map((i) => ({
-    productId: i.productId,
-    name: i.nameAr ?? i.name,
-    quantity: i.quantity,
-    unitPrice: i.price,
-    currency: i.currency,
-    lineTotal: i.price * i.quantity,
-  }));
-}
 
 export default function CheckoutScreen() {
   const router = useRouter();
@@ -38,7 +25,8 @@ export default function CheckoutScreen() {
     productCurrency?: string;
   }>();
   const items = useCartStore((s) => s.items);
-  const clear = useCartStore((s) => s.clear);
+  const setCustomerStep = useCheckoutDraftStore((s) => s.setCustomerStep);
+
   const directProduct = useMemo(() => {
     if (!params.productId || !params.productName) return null;
     return {
@@ -56,38 +44,11 @@ export default function CheckoutScreen() {
 
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
-  const [deliveryAddress, setDeliveryAddress] = useState("");
   const [notes, setNotes] = useState("");
-  const [payment, setPayment] = useState<"cash" | "electronic">("cash");
   const [submitting, setSubmitting] = useState(false);
-  const [detectingLocation, setDetectingLocation] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const detectLocation = async () => {
-    setDetectingLocation(true);
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
-        Alert.alert("تنبيه", "يرجى السماح بالوصول للموقع");
-        return;
-      }
-      const current = await Location.getCurrentPositionAsync({});
-      const [address] = await Location.reverseGeocodeAsync({
-        latitude: current.coords.latitude,
-        longitude: current.coords.longitude,
-      });
-      const fullAddress = [address?.street, address?.district, address?.city, address?.region]
-        .filter(Boolean)
-        .join(", ");
-      setDeliveryAddress(fullAddress || `${current.coords.latitude}, ${current.coords.longitude}`);
-    } catch (_e) {
-      Alert.alert("تنبيه", "تعذر تحديد الموقع، يرجى الإدخال يدوياً");
-    } finally {
-      setDetectingLocation(false);
-    }
-  };
-
-  const submit = async () => {
+  const continueToLocation = () => {
     setError(null);
     if (!customerName.trim()) {
       setError("يرجى إدخال الاسم.");
@@ -97,58 +58,21 @@ export default function CheckoutScreen() {
       setError("يرجى إدخال رقم الهاتف.");
       return;
     }
-    if (!deliveryAddress.trim()) {
-      setError("يرجى إدخال عنوان التوصيل.");
-      return;
-    }
     if (orderItems.length === 0) {
       setError("السلة فارغة.");
       return;
     }
 
     setSubmitting(true);
-    const payload = {
-      customer_name: customerName.trim(),
-      customer_phone: customerPhone.trim(),
-      items: serializeItems(orderItems),
-      total_amount: Math.round(total * 100) / 100,
-      payment_method: payment === "cash" ? "cash" : "electronic",
-      delivery_date: deliveryAddress.trim(),
-      delivery_time: null,
-      notes: notes.trim() || null,
-      status: "pending",
-    };
-
-    const { error: insErr } = await supabase.from("orders").insert(payload);
-
-    if (insErr) {
-      setError(insErr.message);
-      setSubmitting(false);
-      return;
-    }
-
-    const productName = orderItems[0]?.nameAr ?? orderItems[0]?.name ?? "منتج";
-    await supabase.from("notifications").insert({
-      title: "طلب جديد",
-      body: `${customerName.trim()} - ${productName}`,
-      type: "order",
+    setCustomerStep({
+      orderLines: orderItems,
+      fromDirectProduct: Boolean(directProduct),
+      customerName: customerName.trim(),
+      customerPhone: customerPhone.trim(),
+      notes: notes.trim(),
     });
-
-    if (!directProduct) clear();
     setSubmitting(false);
-    if (payment === "electronic") {
-      router.push({
-        pathname: "/payment-mock",
-        params: {
-          amount: String(Math.round(total * 100) / 100),
-          service: productName,
-        },
-      });
-      return;
-    }
-    Alert.alert("تم", "تم إرسال طلبك بنجاح! سنتواصل معك قريباً", [
-      { text: "حسناً", onPress: () => router.replace("/order-success") },
-    ]);
+    router.push("/order-location" as never);
   };
 
   if (orderItems.length === 0) {
@@ -194,41 +118,13 @@ export default function CheckoutScreen() {
             );
           })}
           <View style={styles.totalBar}>
-            <Text style={styles.totalVal}>
-              {total.toFixed(2)} QAR
-            </Text>
+            <Text style={styles.totalVal}>{total.toFixed(2)} QAR</Text>
             <Text style={styles.totalLabel}>الإجمالي</Text>
           </View>
 
-          <Text style={styles.sectionTitle}>طريقة الدفع</Text>
-          <Pressable
-            style={[styles.payOption, payment === "electronic" && styles.payOn]}
-            onPress={() => setPayment("electronic")}
-          >
-            <Text style={styles.payEmoji}>💳</Text>
-            <View style={styles.payTextWrap}>
-              <Text style={styles.payTitle}>دفع إلكتروني</Text>
-            </View>
-            {payment === "electronic" ? (
-              <Ionicons name="checkmark-circle" size={22} color={colors.gold} />
-            ) : (
-              <View style={styles.radioOff} />
-            )}
-          </Pressable>
-          <Pressable
-            style={[styles.payOption, payment === "cash" && styles.payOn]}
-            onPress={() => setPayment("cash")}
-          >
-            <Text style={styles.payEmoji}>🤝</Text>
-            <View style={styles.payTextWrap}>
-              <Text style={styles.payTitle}>نقداً</Text>
-            </View>
-            {payment === "cash" ? (
-              <Ionicons name="checkmark-circle" size={22} color={colors.gold} />
-            ) : (
-              <View style={styles.radioOff} />
-            )}
-          </Pressable>
+          <Text style={styles.hintBlock}>
+            في الخطوة التالية سنطلب إذن الموقع لعرض موقع التوصيل على الخريطة واختيار طريقة الدفع.
+          </Text>
 
           <Text style={styles.sectionTitle}>بيانات التواصل</Text>
           <Text style={styles.label}>الاسم</Text>
@@ -248,31 +144,12 @@ export default function CheckoutScreen() {
             keyboardType="phone-pad"
             style={styles.input}
           />
-          <Text style={styles.label}>عنوان التوصيل</Text>
-          <View style={styles.locationRow}>
-            <Pressable
-              style={[styles.locationBtn, detectingLocation && styles.locationBtnDisabled]}
-              onPress={() => void detectLocation()}
-              disabled={detectingLocation}
-            >
-              <Text style={styles.locationBtnText}>
-                {detectingLocation ? "جارٍ التحديد..." : "📍 موقعي"}
-              </Text>
-            </Pressable>
-            <TextInput
-              value={deliveryAddress}
-              onChangeText={setDeliveryAddress}
-              placeholder="المنطقة، الشارع، المبنى…"
-              placeholderTextColor={colors.textMuted}
-              style={[styles.input, styles.locationInput]}
-            />
-          </View>
 
           <Text style={styles.label}>ملاحظات (اختياري)</Text>
           <TextInput
             value={notes}
             onChangeText={setNotes}
-            placeholder="تعليمات التوصيل، الموقع…"
+            placeholder="تعليمات التوصيل…"
             placeholderTextColor={colors.textMuted}
             style={[styles.input, styles.inputMulti]}
             multiline
@@ -282,15 +159,15 @@ export default function CheckoutScreen() {
 
           <Pressable
             style={[styles.confirmBtn, submitting && styles.confirmBtnDisabled]}
-            onPress={submit}
+            onPress={continueToLocation}
             disabled={submitting}
           >
             {submitting ? (
               <ActivityIndicator color={colors.bg} />
             ) : (
               <>
-                <Text style={styles.confirmText}>تأكيد الطلب</Text>
-                <Ionicons name="checkmark-done" size={22} color={colors.bg} />
+                <Text style={styles.confirmText}>متابعة — موقع التوصيل</Text>
+                <Ionicons name="location" size={22} color={colors.bg} />
               </>
             )}
           </Pressable>
@@ -312,6 +189,14 @@ const styles = StyleSheet.create({
     textAlign: "right",
     marginTop: spacing.md,
     marginBottom: 12,
+  },
+  hintBlock: {
+    color: colors.textMuted,
+    textAlign: "right",
+    lineHeight: 22,
+    fontSize: 13,
+    marginTop: spacing.sm,
+    marginBottom: spacing.md,
   },
   summaryRow: {
     flexDirection: "row",
@@ -350,32 +235,6 @@ const styles = StyleSheet.create({
   },
   totalLabel: { color: colors.white, fontWeight: "800", fontSize: 16 },
   totalVal: { color: colors.gold, fontWeight: "800", fontSize: 20 },
-  payOption: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 14,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    marginBottom: 10,
-    gap: 12,
-  },
-  payDisabled: { opacity: 0.65 },
-  payOn: { borderColor: colors.gold, backgroundColor: colors.goldMuted },
-  payEmoji: { fontSize: 22 },
-  payTextWrap: { flex: 1, alignItems: "flex-end" },
-  payTitle: { color: colors.white, fontWeight: "800", fontSize: 16 },
-  payTitleMuted: { color: colors.textMuted, fontWeight: "700", fontSize: 16 },
-  paySub: { color: colors.textMuted, fontSize: 12, marginTop: 4 },
-  payHint: { color: colors.textMuted, fontSize: 12, marginTop: 4 },
-  radioOff: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 2,
-    borderColor: colors.border,
-  },
   label: {
     color: colors.textSecondary,
     textAlign: "right",
@@ -393,26 +252,9 @@ const styles = StyleSheet.create({
     textAlign: "right",
     marginBottom: spacing.md,
     fontSize: 16,
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
   },
   inputMulti: { minHeight: 88, textAlignVertical: "top" },
-  locationRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: spacing.md,
-  },
-  locationInput: { flex: 1, marginBottom: 0 },
-  locationBtn: {
-    backgroundColor: colors.brand,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 11,
-    minWidth: 88,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  locationBtnDisabled: { opacity: 0.8 },
-  locationBtnText: { color: colors.white, fontSize: 13, fontWeight: "700" },
   error: {
     color: colors.red400,
     textAlign: "center",

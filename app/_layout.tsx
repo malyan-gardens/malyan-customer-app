@@ -47,6 +47,8 @@ export default function RootLayout() {
         />
         <Stack.Screen name="payment-mock" options={{ headerShown: false }} />
         <Stack.Screen name="checkout" options={{ title: "إتمام الطلب" }} />
+        <Stack.Screen name="order-location" options={{ title: "موقع التوصيل" }} />
+        <Stack.Screen name="payment-options" options={{ title: "طريقة الدفع" }} />
         <Stack.Screen name="order-success" options={{ title: "تم بنجاح" }} />
       </Stack>
     </GestureHandlerRootView>

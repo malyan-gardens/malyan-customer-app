@@ -28,12 +28,23 @@ export default function SplashScreen() {
   }, [fade, scale]);
 
   useEffect(() => {
-    const t = setTimeout(async () => {
-      const { data } = await supabase.auth.getSession();
+    let cancelled = false;
+    const minSplashMs = 900;
+
+    const run = async () => {
+      const [{ data }] = await Promise.all([
+        supabase.auth.getSession(),
+        new Promise<void>((resolve) => setTimeout(resolve, minSplashMs)),
+      ]);
+      if (cancelled) return;
       if (data.session) router.replace("/(tabs)/home");
       else router.replace("/login");
-    }, 2000);
-    return () => clearTimeout(t);
+    };
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
   return (
