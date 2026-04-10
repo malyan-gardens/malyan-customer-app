@@ -20,7 +20,7 @@ import { colors, radii, shadows, spacing } from "../../lib/theme";
 
 export default function ProfileScreen() {
   const [displayName, setDisplayName] = useState("مستخدم مليان");
-  const [email, setEmail] = useState(CONTACT.email);
+  const [email, setEmail] = useState<string>(CONTACT.email);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
   useEffect(() => {
