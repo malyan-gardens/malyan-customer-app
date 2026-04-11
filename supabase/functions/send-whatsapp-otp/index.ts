@@ -103,17 +103,9 @@ Deno.serve(async (req) => {
     return jsonResponse({ ok: false, error: "Failed to store OTP" }, 500);
   }
 
-  const toWhatsApp = phone.startsWith("whatsapp:") ? phone : `whatsapp:${phone}`;
-  const fromNorm = fromWa.startsWith("whatsapp:") ? fromWa : `whatsapp:${fromWa.replace(/^whatsapp:/i, "")}`;
+  const from = fromWa.trim().replace(/^whatsapp:/i, "");
 
-  const params = new URLSearchParams({
-    To: toWhatsApp,
-    From: fromNorm,
-    ContentSid: contentSid,
-    ContentVariables: JSON.stringify({ "1": code }),
-  });
-
-  const twilioRes = await fetch(
+  const twilioResponse = await fetch(
     `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
     {
       method: "POST",
@@ -121,12 +113,17 @@ Deno.serve(async (req) => {
         Authorization: `Basic ${btoa(`${accountSid}:${authToken}`)}`,
         "Content-Type": "application/x-www-form-urlencoded",
       },
-      body: params.toString(),
+      body: new URLSearchParams({
+        From: `whatsapp:${from}`,
+        To: `whatsapp:${phone}`,
+        ContentSid: contentSid,
+        ContentVariables: JSON.stringify({ "1": code }),
+      }).toString(),
     }
   );
 
-  const twilioText = await twilioRes.text();
-  if (!twilioRes.ok) {
+  const twilioText = await twilioResponse.text();
+  if (!twilioResponse.ok) {
     console.error("Twilio error:", twilioRes.status, twilioText);
     await admin.from("otp_codes").delete().eq("phone", phone).eq("code", code);
     return jsonResponse(
