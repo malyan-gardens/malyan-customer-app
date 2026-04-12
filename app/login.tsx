@@ -25,12 +25,14 @@ export default function LoginScreen() {
     null
   );
   const [error, setError] = useState<string | null>(null);
-  const redirectTo = makeRedirectUri({ path: "auth/callback" });
+  const oauthRedirectWeb = "https://malyan-customer-app.vercel.app/auth/callback";
+  const oauthRedirectNative = makeRedirectUri({ path: "auth/callback" });
 
   const oauthLogin = async (provider: "google" | "apple") => {
     try {
       setError(null);
       setProviderLoading(provider);
+      const redirectTo = Platform.OS === "web" ? oauthRedirectWeb : oauthRedirectNative;
 
       if (Platform.OS === "web") {
         const { error: oauthError } = await supabase.auth.signInWithOAuth({

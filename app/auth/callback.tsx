@@ -1,9 +1,38 @@
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Platform, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from "../../lib/supabase";
 import { colors } from "../../lib/theme";
+
+async function applySessionFromUrl(): Promise<boolean> {
+  if (Platform.OS !== "web" || typeof window === "undefined") {
+    return false;
+  }
+
+  const { hash, search, href, pathname } = window.location;
+
+  const hashParams = new URLSearchParams(hash.startsWith("#") ? hash.slice(1) : hash);
+  const access_token = hashParams.get("access_token");
+  const refresh_token = hashParams.get("refresh_token");
+  if (access_token && refresh_token) {
+    const { error } = await supabase.auth.setSession({ access_token, refresh_token });
+    if (!error) {
+      window.history.replaceState(null, "", pathname + search);
+      return true;
+    }
+  }
+
+  if (search.includes("code=")) {
+    const { data, error } = await supabase.auth.exchangeCodeForSession(href);
+    if (!error && data.session) {
+      window.history.replaceState(null, "", pathname);
+      return true;
+    }
+  }
+
+  return false;
+}
 
 export default function AuthCallbackScreen() {
   const router = useRouter();
@@ -14,7 +43,8 @@ export default function AuthCallbackScreen() {
 
     const run = async () => {
       try {
-        // Supabase web client may need a brief moment to finalize URL session parsing.
+        await applySessionFromUrl();
+
         for (let i = 0; i < 8; i += 1) {
           const { data } = await supabase.auth.getSession();
           if (data.session) {
