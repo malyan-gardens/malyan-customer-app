@@ -135,17 +135,6 @@ function parseModelJson(raw: string): ModelResult {
   };
 }
 
-async function getUserIdFromAuthHeader(
-  admin: ReturnType<typeof createClient>,
-  authHeader: string | null
-): Promise<string | null> {
-  const token = authHeader?.replace(/^Bearer\s+/i, "").trim();
-  if (!token) return null;
-  const { data, error } = await admin.auth.getUser(token);
-  if (error || !data.user) return null;
-  return data.user.id;
-}
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", {
@@ -169,6 +158,7 @@ Deno.serve(async (req) => {
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
 
@@ -178,7 +168,7 @@ Deno.serve(async (req) => {
       anthropicKeyLen: anthropicKey ? anthropicKey.length : 0,
     });
 
-    if (!supabaseUrl || !serviceKey || !anthropicKey) {
+    if (!supabaseUrl || !anonKey || !serviceKey || !anthropicKey) {
       return jsonResponse(
         { ok: false, code: "MISSING_SERVER_ENV_VARS", error: "Missing server environment variables" },
         500
@@ -189,10 +179,21 @@ Deno.serve(async (req) => {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    const userId = await getUserIdFromAuthHeader(admin, req.headers.get("authorization"));
-    if (!userId) {
+    const supabaseClient = createClient(supabaseUrl, anonKey, {
+      global: {
+        headers: { Authorization: req.headers.get("Authorization") ?? "" },
+      },
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    const {
+      data: { user },
+      error: authError,
+    } = await supabaseClient.auth.getUser();
+    if (authError || !user) {
+      console.error("[malyan-ai-chat] authError:", authError);
       return jsonResponse({ ok: false, code: "UNAUTHORIZED", error: "Unauthorized" }, 401);
     }
+    const userId = user.id;
 
     let body: AiRequest;
     try {
