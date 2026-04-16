@@ -69,11 +69,6 @@ export type InvokeAiResult = {
 };
 
 export async function invokeMalyanAi(payload: InvokeAiPayload): Promise<InvokeAiResult> {
-  const apiKey = process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    throw new Error("Missing EXPO_PUBLIC_ANTHROPIC_API_KEY");
-  }
-
   const SYSTEM_PROMPT = `أنت مليان الذكي، مستشار متخصص في النباتات والحدائق لشركة مليان للحدائق في قطر.
 تتحدث فقط عن: النباتات، تصميم الحدائق، الصيانة، منتجات مليان.
 إذا سُئلت عن أي موضوع آخر قل: "أنا متخصص في عالم النباتات والحدائق فقط!"
@@ -109,12 +104,16 @@ export async function invokeMalyanAi(payload: InvokeAiPayload): Promise<InvokeAi
       ? [...history, { role: "user", content: userContent }]
       : [{ role: "user", content: userContent }];
 
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
+  // On web we can call the same-origin proxy. On native, use the Vercel domain.
+  const proxyUrl =
+    typeof window !== "undefined"
+      ? "/api/anthropic-proxy"
+      : "https://malyan-customer-app.vercel.app/api/anthropic-proxy";
+
+  const response = await fetch(proxyUrl, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
       model,
@@ -125,7 +124,10 @@ export async function invokeMalyanAi(payload: InvokeAiPayload): Promise<InvokeAi
   });
 
   const data = await response.json();
-  const reply: string = data?.content?.[0]?.text ?? "عذراً، حدث خطأ.";
+  const reply: string =
+    data?.content?.[0]?.text ??
+    data?.error?.message ??
+    "عذراً، حدث خطأ.";
 
   if (!response.ok) {
     throw new Error(reply);
