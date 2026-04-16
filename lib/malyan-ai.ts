@@ -101,7 +101,6 @@ export async function invokeMalyanAi(payload: InvokeAiPayload): Promise<InvokeAi
         headers: {
           "Content-Type": "application/json",
           apikey: supabaseAnonKey,
-          Authorization: `Bearer ${supabaseAnonKey}`,
         },
         body: JSON.stringify(reqBody),
       }
