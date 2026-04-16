@@ -70,30 +70,62 @@ export type InvokeAiResult = {
 };
 
 export async function invokeMalyanAi(payload: InvokeAiPayload): Promise<InvokeAiResult> {
-  const headers =
-    payload.accessToken && payload.accessToken.trim().length > 0
-      ? { Authorization: `Bearer ${payload.accessToken}` }
-      : undefined;
+  const accessToken = payload.accessToken?.trim();
+  if (!accessToken) {
+    throw new Error("Unauthorized");
+  }
 
-  const invokeBody: Omit<InvokeAiPayload, "accessToken"> = {
+  const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error("Missing Supabase env vars");
+  }
+
+  const reqBody = {
     message: payload.message,
+    imageBase64: payload.image?.base64 ?? null,
+    history: payload.history ?? [],
+    plantType: payload.preferences?.plant_nature ?? null,
     conversationId: payload.conversationId,
-    history: payload.history,
     mode: payload.mode,
     preferences: payload.preferences,
     image: payload.image,
   };
 
-  const { data, error } = await supabase.functions.invoke("malyan-ai-chat", {
-    body: invokeBody,
-    headers,
-  });
+  let data: any;
+  try {
+    const response = await fetch(
+      `${supabaseUrl}/functions/v1/malyan-ai-chat`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+          apikey: supabaseAnonKey,
+        },
+        body: JSON.stringify(reqBody),
+      }
+    );
+    data = await response.json();
+    if (!response.ok) {
+      const code = typeof data?.code === "string" ? data.code : "";
+      const fallback =
+        typeof data?.error === "string" && data.error.length > 0
+          ? data.error
+          : "تعذر الوصول لمليان الذكي حالياً.";
+      throw new Error(code ? `${code}: ${fallback}` : fallback);
+    }
+  } catch (err) {
+    if (err instanceof Error) throw err;
+    throw new Error(
+      describeFunctionInvokeError(err) || "تعذر الاتصال بخدمة مليان الذكي."
+    );
+  }
 
-  if (error) throw new Error(describeFunctionInvokeError(error));
   if (!data?.ok) {
-    const code = typeof data?.code === "string" ? data.code : "";
+    const code = typeof data.code === "string" ? data.code : "";
     const fallback =
-      typeof data?.error === "string" && data.error.length > 0
+      typeof data.error === "string" && data.error.length > 0
         ? data.error
         : "تعذر الوصول لمليان الذكي حالياً.";
     throw new Error(code ? `${code}: ${fallback}` : fallback);

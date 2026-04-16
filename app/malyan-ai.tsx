@@ -357,9 +357,19 @@ export default function MalyanAiScreen() {
         data: { session },
       } = await supabase.auth.getSession();
       const accessToken = session?.access_token;
+      console.log(
+        "Invoking malyan-ai-chat with token:",
+        session?.access_token?.slice(0, 20)
+      );
       if (!accessToken) {
         throw new Error("Unauthorized");
       }
+
+      console.log("Calling supabase.functions.invoke via invokeMalyanAi", {
+        hasToken: Boolean(accessToken),
+        historyCount: history.length,
+        hasImage: Boolean(selectedImageBase64),
+      });
 
       const res = await invokeMalyanAi({
         message,
@@ -391,6 +401,20 @@ export default function MalyanAiScreen() {
       if (res.usage) setUsage(res.usage);
       setSelectedImageBase64(null);
     } catch (e) {
+      // Requested deep debug logging for function invocation failures.
+      try {
+        console.log("Full error:", JSON.stringify(e));
+      } catch {
+        console.log("Full error:", String(e));
+      }
+      if (e instanceof Error) {
+        console.log("Full error details:", JSON.stringify({
+          name: e.name,
+          message: e.message,
+          stack: e.stack,
+        }));
+      }
+
       const msg = e instanceof Error ? e.message : "تعذر إكمال الطلب.";
       setError(msg);
 
