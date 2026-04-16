@@ -135,16 +135,15 @@ export default function AiDesignWizardScreen() {
 أريد اقتراح تخطيط + قائمة منتجات (طبيعي/صناعي حسب التفضيل).`;
 
       const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      const accessToken = session?.access_token;
-      if (!accessToken) {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user?.id) {
         throw new Error("Unauthorized");
       }
 
       const payload: InvokeAiPayload = {
         message: prompt,
-        accessToken,
+        userId: user.id,
         mode: "design",
         preferences,
         image: selectedImageBase64

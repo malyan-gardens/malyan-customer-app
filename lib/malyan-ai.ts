@@ -45,7 +45,7 @@ export type AiUsage = {
 
 export type InvokeAiPayload = {
   message: string;
-  accessToken?: string;
+  userId?: string;
   conversationId?: string;
   history?: Array<{ role: ChatRole; content: string; created_at?: string }>;
   mode?: "chat" | "design" | "doctor";
@@ -70,9 +70,9 @@ export type InvokeAiResult = {
 };
 
 export async function invokeMalyanAi(payload: InvokeAiPayload): Promise<InvokeAiResult> {
-  const accessToken = payload.accessToken?.trim();
-  if (!accessToken) {
-    throw new Error("Unauthorized");
+  const userId = payload.userId?.trim();
+  if (!userId) {
+    throw new Error("User ID is required");
   }
 
   const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
@@ -83,6 +83,7 @@ export async function invokeMalyanAi(payload: InvokeAiPayload): Promise<InvokeAi
 
   const reqBody = {
     message: payload.message,
+    userId,
     imageBase64: payload.image?.base64 ?? null,
     history: payload.history ?? [],
     plantType: payload.preferences?.plant_nature ?? null,
@@ -100,7 +101,6 @@ export async function invokeMalyanAi(payload: InvokeAiPayload): Promise<InvokeAi
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
           apikey: supabaseAnonKey,
         },
         body: JSON.stringify(reqBody),

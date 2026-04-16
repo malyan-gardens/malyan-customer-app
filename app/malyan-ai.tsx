@@ -1,3 +1,4 @@
+// Updated: force rebuild
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { Stack, useRouter } from "expo-router";
@@ -354,26 +355,22 @@ export default function MalyanAiScreen() {
 
     try {
       const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      const accessToken = session?.access_token;
-      console.log(
-        "Invoking malyan-ai-chat with token:",
-        session?.access_token?.slice(0, 20)
-      );
-      if (!accessToken) {
+        data: { user },
+      } = await supabase.auth.getUser();
+      console.log("Invoking malyan-ai-chat with userId:", user?.id);
+      if (!user?.id) {
         throw new Error("Unauthorized");
       }
 
-      console.log("Calling supabase.functions.invoke via invokeMalyanAi", {
-        hasToken: Boolean(accessToken),
+      console.log("Calling direct fetch via invokeMalyanAi", {
+        hasUserId: Boolean(user?.id),
         historyCount: history.length,
         hasImage: Boolean(selectedImageBase64),
       });
 
       const res = await invokeMalyanAi({
         message,
-        accessToken,
+        userId: user.id,
         conversationId: conversationId || undefined,
         history,
         mode: "chat",

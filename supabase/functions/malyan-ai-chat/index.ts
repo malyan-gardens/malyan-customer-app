@@ -9,6 +9,7 @@ type ChatMessage = {
 
 type AiRequest = {
   message?: string;
+  userId?: string;
   conversationId?: string;
   history?: ChatMessage[];
   mode?: "chat" | "design" | "doctor";
@@ -158,42 +159,25 @@ Deno.serve(async (req) => {
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
 
     console.log("[malyan-ai-chat] request", {
       method: req.method,
-      hasAuthHeader: Boolean(req.headers.get("authorization")),
+      hasUserIdInBody: false,
       anthropicKeyLen: anthropicKey ? anthropicKey.length : 0,
     });
 
-    if (!supabaseUrl || !anonKey || !serviceKey || !anthropicKey) {
+    if (!supabaseUrl || !serviceKey || !anthropicKey) {
       return jsonResponse(
         { ok: false, code: "MISSING_SERVER_ENV_VARS", error: "Missing server environment variables" },
         500
       );
     }
 
-    const admin = createClient(supabaseUrl, serviceKey, {
+    const adminClient = createClient(supabaseUrl, serviceKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
-
-    const supabaseClient = createClient(supabaseUrl, anonKey, {
-      global: {
-        headers: { Authorization: req.headers.get("Authorization") ?? "" },
-      },
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
-    const {
-      data: { user },
-      error: authError,
-    } = await supabaseClient.auth.getUser();
-    if (authError || !user) {
-      console.error("[malyan-ai-chat] authError:", authError);
-      return jsonResponse({ ok: false, code: "UNAUTHORIZED", error: "Unauthorized" }, 401);
-    }
-    const userId = user.id;
 
     let body: AiRequest;
     try {
@@ -202,13 +186,24 @@ Deno.serve(async (req) => {
       return jsonResponse({ ok: false, code: "INVALID_JSON", error: "Invalid JSON body" }, 400);
     }
 
+    const userId = String(body.userId ?? "").trim();
+    if (!userId) {
+      return jsonResponse({ ok: false, code: "USER_ID_REQUIRED", error: "User ID is required" }, 400);
+    }
+
+    console.log("[malyan-ai-chat] request", {
+      method: req.method,
+      hasUserIdInBody: Boolean(userId),
+      anthropicKeyLen: anthropicKey ? anthropicKey.length : 0,
+    });
+
     const userMessage = String(body.message ?? "").trim();
     if (!userMessage) {
       return jsonResponse({ ok: false, code: "MESSAGE_REQUIRED", error: "Message is required" }, 400);
     }
 
   const todayIso = new Date().toISOString().slice(0, 10);
-    const { data: usageRow, error: usageReadError } = await admin
+    const { data: usageRow, error: usageReadError } = await adminClient
       .from("ai_daily_usage")
       .select("message_count,cost_usd")
       .eq("user_id", userId)
@@ -239,7 +234,7 @@ Deno.serve(async (req) => {
     const hasImage = Boolean(body.image?.base64);
     const model = hasImage ? IMAGE_MODEL : CHAT_MODEL;
 
-    const { data: catalogRows, error: catalogErr } = await admin
+    const { data: catalogRows, error: catalogErr } = await adminClient
       .from("inventory")
       .select("id,name_ar,description,selling_price,currency,image_url,category,quantity")
       .gt("quantity", 0)
@@ -344,7 +339,7 @@ Deno.serve(async (req) => {
   for (const rec of modelParsed.recommendations.slice(0, 8)) {
     const qty = clampQty(rec.quantity);
 
-    const { data: exactMatches } = await admin
+    const { data: exactMatches } = await adminClient
       .from("inventory")
       .select("id,name_ar,description,selling_price,currency,image_url,category,quantity")
       .ilike("name_ar", `%${rec.product_name}%`)
@@ -368,7 +363,7 @@ Deno.serve(async (req) => {
 
       // Try to find a close available product by natural/artificial hint keywords in catalog columns.
       for (const kw of keywords) {
-        const { data: alternatives } = await admin
+        const { data: alternatives } = await adminClient
           .from("inventory")
           .select("id,name_ar,description,selling_price,currency,image_url,category,quantity")
           .or(
@@ -389,7 +384,7 @@ Deno.serve(async (req) => {
           .map((t) => t.trim())
           .filter(Boolean)[0];
         if (firstToken) {
-          const { data: alternatives } = await admin
+          const { data: alternatives } = await adminClient
             .from("inventory")
             .select("id,name_ar,description,selling_price,currency,image_url,category,quantity")
             .ilike("name_ar", `%${firstToken}%`)
@@ -423,7 +418,7 @@ Deno.serve(async (req) => {
   const nextCost = usedCost + requestCost;
   const nextMessageCount = usedMessages + 1;
 
-    const { error: usageUpsertErr } = await admin.from("ai_daily_usage").upsert(
+    const { error: usageUpsertErr } = await adminClient.from("ai_daily_usage").upsert(
       {
         user_id: userId,
         date: todayIso,
@@ -474,7 +469,7 @@ Deno.serve(async (req) => {
 
   let conversationId = body.conversationId ?? "";
     if (conversationId) {
-      const { error: updateErr } = await admin
+      const { error: updateErr } = await adminClient
         .from("ai_conversations")
         .update(convoPayload)
         .eq("id", conversationId)
@@ -485,7 +480,7 @@ Deno.serve(async (req) => {
       }
     }
     if (!conversationId) {
-      const { data: inserted, error: insertErr } = await admin
+      const { data: inserted, error: insertErr } = await adminClient
         .from("ai_conversations")
         .insert(convoPayload)
         .select("id")
