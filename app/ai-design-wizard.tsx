@@ -18,6 +18,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, radii, spacing } from "../lib/theme";
 import { MalyanLogo } from "../components/MalyanLogo";
 import { useCartStore } from "../store/cartStore";
+import { supabase } from "../lib/supabase";
 import {
   invokeMalyanAi,
   requestUnavailableProduct,
@@ -133,8 +134,17 @@ export default function AiDesignWizardScreen() {
 الميزانية: ${budget || "غير محدد"}.
 أريد اقتراح تخطيط + قائمة منتجات (طبيعي/صناعي حسب التفضيل).`;
 
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const accessToken = session?.access_token;
+      if (!accessToken) {
+        throw new Error("Unauthorized");
+      }
+
       const payload: InvokeAiPayload = {
         message: prompt,
+        accessToken,
         mode: "design",
         preferences,
         image: selectedImageBase64

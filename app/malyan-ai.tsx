@@ -353,8 +353,17 @@ export default function MalyanAiScreen() {
     setTyping(true);
 
     try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const accessToken = session?.access_token;
+      if (!accessToken) {
+        throw new Error("Unauthorized");
+      }
+
       const res = await invokeMalyanAi({
         message,
+        accessToken,
         conversationId: conversationId || undefined,
         history,
         mode: "chat",

@@ -45,6 +45,7 @@ export type AiUsage = {
 
 export type InvokeAiPayload = {
   message: string;
+  accessToken?: string;
   conversationId?: string;
   history?: Array<{ role: ChatRole; content: string; created_at?: string }>;
   mode?: "chat" | "design" | "doctor";
@@ -69,8 +70,23 @@ export type InvokeAiResult = {
 };
 
 export async function invokeMalyanAi(payload: InvokeAiPayload): Promise<InvokeAiResult> {
+  const headers =
+    payload.accessToken && payload.accessToken.trim().length > 0
+      ? { Authorization: `Bearer ${payload.accessToken}` }
+      : undefined;
+
+  const invokeBody: Omit<InvokeAiPayload, "accessToken"> = {
+    message: payload.message,
+    conversationId: payload.conversationId,
+    history: payload.history,
+    mode: payload.mode,
+    preferences: payload.preferences,
+    image: payload.image,
+  };
+
   const { data, error } = await supabase.functions.invoke("malyan-ai-chat", {
-    body: payload,
+    body: invokeBody,
+    headers,
   });
 
   if (error) throw new Error(describeFunctionInvokeError(error));

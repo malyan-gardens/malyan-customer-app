@@ -148,6 +148,10 @@ async function getUserIdFromAuthHeader(
 
 Deno.serve(async (req) => {
   try {
+    console.log("Function called");
+    console.log("ANTHROPIC_KEY exists:", !!Deno.env.get("ANTHROPIC_API_KEY"));
+    console.log("Request method:", req.method);
+
     if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
     if (req.method !== "POST") {
       return jsonResponse({ ok: false, code: "METHOD_NOT_ALLOWED", error: "Method not allowed" }, 405);
