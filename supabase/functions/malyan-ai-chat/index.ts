@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import { corsHeaders, jsonResponse } from "../_shared/cors.ts";
+import { jsonResponse } from "../_shared/cors.ts";
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -143,7 +143,7 @@ Deno.serve(async (req) => {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "POST, OPTIONS",
         "Access-Control-Allow-Headers":
-          "authorization, x-client-info, apikey, content-type",
+          "x-client-info, apikey, content-type",
         "Content-Type": "application/json",
       },
     });
