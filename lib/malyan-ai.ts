@@ -69,79 +69,78 @@ export type InvokeAiResult = {
 };
 
 export async function invokeMalyanAi(payload: InvokeAiPayload): Promise<InvokeAiResult> {
-  const userId = payload.userId?.trim();
-  if (!userId) {
-    throw new Error("User ID is required");
+  const apiKey = process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    throw new Error("Missing EXPO_PUBLIC_ANTHROPIC_API_KEY");
   }
 
-  const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
-  if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error("Missing Supabase env vars");
-  }
+  const SYSTEM_PROMPT = `أنت مليان الذكي، مستشار متخصص في النباتات والحدائق لشركة مليان للحدائق في قطر.
+تتحدث فقط عن: النباتات، تصميم الحدائق، الصيانة، منتجات مليان.
+إذا سُئلت عن أي موضوع آخر قل: "أنا متخصص في عالم النباتات والحدائق فقط!"
+دائماً رد بنفس لغة المستخدم.`;
 
-  const reqBody = {
-    message: payload.message,
-    userId,
-    imageBase64: payload.image?.base64 ?? null,
-    history: payload.history ?? [],
-    plantType: payload.preferences?.plant_nature ?? null,
-    conversationId: payload.conversationId,
-    mode: payload.mode,
-    preferences: payload.preferences,
-    image: payload.image,
-  };
+  // Prefer a multimodal model when we have an image.
+  const model = payload.image?.base64 ? "claude-sonnet-4-6" : "claude-haiku-4-5";
 
-  let data: any;
-  try {
-    const response = await fetch(
-      `${supabaseUrl}/functions/v1/malyan-ai-chat`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: supabaseAnonKey,
+  const history = payload.history?.length
+    ? payload.history.map((h) => ({
+        role: h.role,
+        content: h.content,
+      }))
+    : [];
+
+  const imageBase64 = payload.image?.base64;
+  const userContent = imageBase64
+    ? [
+        {
+          type: "image",
+          source: {
+            type: "base64",
+            media_type: payload.image?.mediaType ?? "image/jpeg",
+            data: imageBase64,
+          },
         },
-        body: JSON.stringify(reqBody),
-      }
-    );
-    data = await response.json();
-    if (!response.ok) {
-      const code = typeof data?.code === "string" ? data.code : "";
-      const fallback =
-        typeof data?.error === "string" && data.error.length > 0
-          ? data.error
-          : "تعذر الوصول لمليان الذكي حالياً.";
-      throw new Error(code ? `${code}: ${fallback}` : fallback);
-    }
-  } catch (err) {
-    if (err instanceof Error) throw err;
-    throw new Error("تعذر الاتصال بخدمة مليان الذكي.");
-  }
+        { type: "text", text: payload.message },
+      ]
+    : payload.message;
 
-  if (!data?.ok) {
-    const code = typeof data.code === "string" ? data.code : "";
-    const fallback =
-      typeof data.error === "string" && data.error.length > 0
-        ? data.error
-        : "تعذر الوصول لمليان الذكي حالياً.";
-    throw new Error(code ? `${code}: ${fallback}` : fallback);
+  const messages =
+    history.length > 0
+      ? [...history, { role: "user", content: userContent }]
+      : [{ role: "user", content: userContent }];
+
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 1000,
+      system: SYSTEM_PROMPT,
+      messages,
+    }),
+  });
+
+  const data = await response.json();
+  const reply: string = data?.content?.[0]?.text ?? "عذراً، حدث خطأ.";
+
+  if (!response.ok) {
+    throw new Error(reply);
   }
 
   return {
-    conversationId: String(data.conversation_id ?? ""),
-    reply: String(data.reply ?? ""),
-    recommendations: (data.recommendations ?? []) as AiRecommendation[],
-    diagnosis: String(data.diagnosis ?? ""),
-    layoutSuggestion: String(data.layout_suggestion ?? ""),
-    maintenancePlan: Array.isArray(data.maintenance_plan)
-      ? data.maintenance_plan.map((x: unknown) => String(x))
-      : [],
-    requestedProducts: Array.isArray(data.requested_products)
-      ? data.requested_products
-      : [],
-    estimatedProductsCostQar: Number(data.estimated_products_cost_qr ?? 0),
-    usage: (data.usage ?? null) as AiUsage | null,
+    conversationId: payload.conversationId ?? "",
+    reply,
+    recommendations: [],
+    diagnosis: "",
+    layoutSuggestion: "",
+    maintenancePlan: [],
+    requestedProducts: [],
+    estimatedProductsCostQar: 0,
+    usage: null,
   };
 }
 
