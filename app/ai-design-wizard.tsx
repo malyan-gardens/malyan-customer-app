@@ -149,7 +149,23 @@ export default function AiDesignWizardScreen() {
       setRecommendations(res.recommendations);
       setEstimatedCostQar(res.estimatedProductsCostQar);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "تعذر إنشاء التصميم.");
+      console.log("[ai-design-wizard] malyan-ai-chat error:", e);
+      const rawMsg = e instanceof Error ? e.message : String(e);
+
+      if (rawMsg.includes("ANTHROPIC_API_KEY") || rawMsg.includes("Missing server environment variables")) {
+        setError("تعذر تشغيل مليان الذكي بسبب مشكلة في إعدادات خدمة الذكاء الاصطناعي. حاول مرة أخرى لاحقاً.");
+      } else if (rawMsg.includes("ANTHROPIC_ERROR")) {
+        setError("تعذر التواصل مع خدمة التحليل حالياً. حاول مرة أخرى لاحقاً.");
+      } else if (rawMsg.includes("Unauthorized")) {
+        setError("انتهت جلسة تسجيل الدخول. يرجى تسجيل الدخول مرة أخرى ثم المحاولة.");
+      } else if (rawMsg.includes("DAILY_MESSAGES_EXCEEDED") || rawMsg.includes("Daily message limit reached")) {
+        setError("وصلت للحد اليومي للمحادثات. تبقى لك 0 رسالة اليوم. جرّب لاحقاً.");
+      } else if (rawMsg.includes("DAILY_BUDGET_EXCEEDED") || rawMsg.includes("Daily budget limit reached")) {
+        setError("وصلت للحد اليومي للميزانية. جرّب لاحقاً.");
+      } else {
+        // Keep original error message for easier debugging, but still Arabic-friendly.
+        setError(rawMsg || "تعذر إنشاء التصميم. حاول مرة أخرى.");
+      }
     } finally {
       setLoading(false);
     }

@@ -147,80 +147,92 @@ async function getUserIdFromAuthHeader(
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  if (req.method !== "POST") return jsonResponse({ ok: false, error: "Method not allowed" }, 405);
-
-  const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
-  if (!supabaseUrl || !serviceKey || !anthropicKey) {
-    return jsonResponse({ ok: false, error: "Missing server environment variables" }, 500);
-  }
-
-  const admin = createClient(supabaseUrl, serviceKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-
-  const userId = await getUserIdFromAuthHeader(admin, req.headers.get("authorization"));
-  if (!userId) return jsonResponse({ ok: false, error: "Unauthorized" }, 401);
-
-  let body: AiRequest;
   try {
-    body = await req.json();
-  } catch {
-    return jsonResponse({ ok: false, error: "Invalid JSON body" }, 400);
-  }
+    if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+    if (req.method !== "POST") {
+      return jsonResponse({ ok: false, code: "METHOD_NOT_ALLOWED", error: "Method not allowed" }, 405);
+    }
 
-  const userMessage = String(body.message ?? "").trim();
-  if (!userMessage) return jsonResponse({ ok: false, error: "Message is required" }, 400);
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
+
+    console.log("[malyan-ai-chat] request", {
+      method: req.method,
+      hasAuthHeader: Boolean(req.headers.get("authorization")),
+      anthropicKeyLen: anthropicKey ? anthropicKey.length : 0,
+    });
+
+    if (!supabaseUrl || !serviceKey || !anthropicKey) {
+      return jsonResponse(
+        { ok: false, code: "MISSING_SERVER_ENV_VARS", error: "Missing server environment variables" },
+        500
+      );
+    }
+
+    const admin = createClient(supabaseUrl, serviceKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+
+    const userId = await getUserIdFromAuthHeader(admin, req.headers.get("authorization"));
+    if (!userId) {
+      return jsonResponse({ ok: false, code: "UNAUTHORIZED", error: "Unauthorized" }, 401);
+    }
+
+    let body: AiRequest;
+    try {
+      body = await req.json();
+    } catch {
+      return jsonResponse({ ok: false, code: "INVALID_JSON", error: "Invalid JSON body" }, 400);
+    }
+
+    const userMessage = String(body.message ?? "").trim();
+    if (!userMessage) {
+      return jsonResponse({ ok: false, code: "MESSAGE_REQUIRED", error: "Message is required" }, 400);
+    }
 
   const todayIso = new Date().toISOString().slice(0, 10);
-  const { data: usageRow, error: usageReadError } = await admin
-    .from("ai_daily_usage")
-    .select("message_count,cost_usd")
-    .eq("user_id", userId)
-    .eq("date", todayIso)
-    .maybeSingle();
-  if (usageReadError) {
-    return jsonResponse({ ok: false, error: "Failed to read usage limits" }, 500);
-  }
+    const { data: usageRow, error: usageReadError } = await admin
+      .from("ai_daily_usage")
+      .select("message_count,cost_usd")
+      .eq("user_id", userId)
+      .eq("date", todayIso)
+      .maybeSingle();
+    if (usageReadError) {
+      console.error("[malyan-ai-chat] usageReadError:", usageReadError);
+      return jsonResponse({ ok: false, code: "USAGE_READ_FAILED", error: "Failed to read usage limits" }, 500);
+    }
 
-  const usedMessages = Number(usageRow?.message_count ?? 0);
-  const usedCost = Number(usageRow?.cost_usd ?? 0);
+    const usedMessages = Number(usageRow?.message_count ?? 0);
+    const usedCost = Number(usageRow?.cost_usd ?? 0);
+    console.log("[malyan-ai-chat] usage", { usedMessages, usedCost, today: todayIso });
 
-  if (usedMessages >= DAILY_MESSAGE_LIMIT) {
-    return jsonResponse(
-      {
-        ok: false,
-        code: "DAILY_MESSAGES_EXCEEDED",
-        error: "Daily message limit reached",
-        remaining_messages: 0,
-      },
-      429
-    );
-  }
-  if (usedCost >= DAILY_COST_LIMIT_USD) {
-    return jsonResponse(
-      {
-        ok: false,
-        code: "DAILY_BUDGET_EXCEEDED",
-        error: "Daily budget limit reached",
-        remaining_budget_usd: 0,
-      },
-      429
-    );
-  }
+    if (usedMessages >= DAILY_MESSAGE_LIMIT) {
+      return jsonResponse(
+        { ok: false, code: "DAILY_MESSAGES_EXCEEDED", error: "Daily message limit reached", remaining_messages: 0 },
+        429
+      );
+    }
+    if (usedCost >= DAILY_COST_LIMIT_USD) {
+      return jsonResponse(
+        { ok: false, code: "DAILY_BUDGET_EXCEEDED", error: "Daily budget limit reached", remaining_budget_usd: 0 },
+        429
+      );
+    }
 
-  const hasImage = Boolean(body.image?.base64);
-  const model = hasImage ? IMAGE_MODEL : CHAT_MODEL;
+    const hasImage = Boolean(body.image?.base64);
+    const model = hasImage ? IMAGE_MODEL : CHAT_MODEL;
 
-  const { data: catalogRows } = await admin
-    .from("inventory")
-    .select("id,name_ar,description,selling_price,currency,image_url,category,quantity")
-    .gt("quantity", 0)
-    .order("quantity", { ascending: false })
-    .limit(200);
-  const catalog = (catalogRows ?? []) as CatalogItem[];
+    const { data: catalogRows, error: catalogErr } = await admin
+      .from("inventory")
+      .select("id,name_ar,description,selling_price,currency,image_url,category,quantity")
+      .gt("quantity", 0)
+      .order("quantity", { ascending: false })
+      .limit(200);
+    if (catalogErr) {
+      console.error("[malyan-ai-chat] catalogErr:", catalogErr);
+    }
+    const catalog = (catalogRows ?? []) as CatalogItem[];
 
   const catalogSummary = catalog
     .slice(0, 40)
@@ -263,46 +275,52 @@ Deno.serve(async (req) => {
     });
   }
 
-  const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "x-api-key": anthropicKey,
-      "anthropic-version": "2023-06-01",
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: 1000,
-      temperature: 0.7,
-      system: SYSTEM_PROMPT,
-      messages: [{ role: "user", content: contentParts }],
-    }),
-  });
+    const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": anthropicKey,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 1000,
+        temperature: 0.7,
+        system: SYSTEM_PROMPT,
+        messages: [{ role: "user", content: contentParts }],
+      }),
+    });
 
-  if (!anthropicRes.ok) {
-    const errText = await anthropicRes.text();
-    console.error("malyan-ai-chat anthropic error:", anthropicRes.status, errText);
-    return jsonResponse({ ok: false, error: "AI service unavailable" }, 502);
-  }
+    if (!anthropicRes.ok) {
+      const errText = await anthropicRes.text();
+      console.error("malyan-ai-chat anthropic error:", anthropicRes.status, errText);
+      return jsonResponse(
+        { ok: false, code: "ANTHROPIC_ERROR", error: "AI service unavailable" },
+        502
+      );
+    }
 
-  const anthropicJson = (await anthropicRes.json()) as {
-    content?: Array<{ type: string; text?: string }>;
-    usage?: { input_tokens?: number; output_tokens?: number };
-  };
-  const outputText =
-    anthropicJson.content?.find((c) => c.type === "text" && c.text)?.text?.trim() ?? "";
-
-  let modelParsed: ModelResult;
-  try {
-    modelParsed = parseModelJson(outputText);
-  } catch {
-    modelParsed = {
-      reply: outputText || "أنا متخصص في عالم النباتات والحدائق فقط! كيف أساعدك في تصميم أو العناية بحديقتك؟",
-      recommendations: [],
-      maintenance_plan: [],
-      requested_products: [],
+    const anthropicJson = (await anthropicRes.json()) as {
+      content?: Array<{ type: string; text?: string }>;
+      usage?: { input_tokens?: number; output_tokens?: number };
     };
-  }
+    const outputText =
+      anthropicJson.content?.find((c) => c.type === "text" && c.text)?.text?.trim() ?? "";
+
+    let modelParsed: ModelResult;
+    try {
+      modelParsed = parseModelJson(outputText);
+    } catch (parseErr) {
+      console.error("[malyan-ai-chat] parseModelJson error:", parseErr);
+      modelParsed = {
+        reply:
+          outputText ||
+          "أنا متخصص في عالم النباتات والحدائق فقط! كيف أساعدك في تصميم أو العناية بحديقتك؟",
+        recommendations: [],
+        maintenance_plan: [],
+        requested_products: [],
+      };
+    }
 
   const normalizedRecommendations: Array<Record<string, unknown>> = [];
   let estimatedProductsCost = 0;
@@ -389,15 +407,18 @@ Deno.serve(async (req) => {
   const nextCost = usedCost + requestCost;
   const nextMessageCount = usedMessages + 1;
 
-  await admin.from("ai_daily_usage").upsert(
-    {
-      user_id: userId,
-      date: todayIso,
-      message_count: nextMessageCount,
-      cost_usd: Number(nextCost.toFixed(4)),
-    },
-    { onConflict: "user_id,date" }
-  );
+    const { error: usageUpsertErr } = await admin.from("ai_daily_usage").upsert(
+      {
+        user_id: userId,
+        date: todayIso,
+        message_count: nextMessageCount,
+        cost_usd: Number(nextCost.toFixed(4)),
+      },
+      { onConflict: "user_id,date" }
+    );
+    if (usageUpsertErr) {
+      console.error("[malyan-ai-chat] usageUpsertErr:", usageUpsertErr);
+    }
 
   const nowIso = new Date().toISOString();
   const savedHistory = [
@@ -436,41 +457,55 @@ Deno.serve(async (req) => {
   };
 
   let conversationId = body.conversationId ?? "";
-  if (conversationId) {
-    const { error: updateErr } = await admin
-      .from("ai_conversations")
-      .update(convoPayload)
-      .eq("id", conversationId)
-      .eq("user_id", userId);
-    if (updateErr) conversationId = "";
-  }
-  if (!conversationId) {
-    const { data: inserted, error: insertErr } = await admin
-      .from("ai_conversations")
-      .insert(convoPayload)
-      .select("id")
-      .single();
-    if (!insertErr && inserted?.id) conversationId = inserted.id as string;
-  }
+    if (conversationId) {
+      const { error: updateErr } = await admin
+        .from("ai_conversations")
+        .update(convoPayload)
+        .eq("id", conversationId)
+        .eq("user_id", userId);
+      if (updateErr) {
+        console.error("[malyan-ai-chat] conversation update error:", updateErr);
+        conversationId = "";
+      }
+    }
+    if (!conversationId) {
+      const { data: inserted, error: insertErr } = await admin
+        .from("ai_conversations")
+        .insert(convoPayload)
+        .select("id")
+        .single();
+      if (insertErr) {
+        console.error("[malyan-ai-chat] conversation insert error:", insertErr);
+        conversationId = "";
+      } else if (inserted?.id) {
+        conversationId = inserted.id as string;
+      }
+    }
 
-  return jsonResponse({
-    ok: true,
-    conversation_id: conversationId,
-    reply: modelParsed.reply,
-    recommendations: normalizedRecommendations,
-    requested_products: modelParsed.requested_products ?? [],
-    diagnosis: modelParsed.diagnosis ?? "",
-    layout_suggestion: modelParsed.layout_suggestion ?? "",
-    maintenance_plan: modelParsed.maintenance_plan ?? [],
-    estimated_products_cost_qr: Number(estimatedProductsCost.toFixed(2)),
-    usage: {
-      model,
-      request_cost_usd: Number(requestCost.toFixed(6)),
-      daily_cost_usd: Number(nextCost.toFixed(4)),
-      daily_message_count: nextMessageCount,
-      remaining_messages: Math.max(0, DAILY_MESSAGE_LIMIT - nextMessageCount),
-      remaining_budget_usd: Number(Math.max(0, DAILY_COST_LIMIT_USD - nextCost).toFixed(4)),
-      budget_limit_usd: DAILY_COST_LIMIT_USD,
-    },
-  });
+    return jsonResponse({
+      ok: true,
+      conversation_id: conversationId,
+      reply: modelParsed.reply,
+      recommendations: normalizedRecommendations,
+      requested_products: modelParsed.requested_products ?? [],
+      diagnosis: modelParsed.diagnosis ?? "",
+      layout_suggestion: modelParsed.layout_suggestion ?? "",
+      maintenance_plan: modelParsed.maintenance_plan ?? [],
+      estimated_products_cost_qr: Number(estimatedProductsCost.toFixed(2)),
+      usage: {
+        model,
+        request_cost_usd: Number(requestCost.toFixed(6)),
+        daily_cost_usd: Number(nextCost.toFixed(4)),
+        daily_message_count: nextMessageCount,
+        remaining_messages: Math.max(0, DAILY_MESSAGE_LIMIT - nextMessageCount),
+        remaining_budget_usd: Number(
+          Math.max(0, DAILY_COST_LIMIT_USD - nextCost).toFixed(4)
+        ),
+        budget_limit_usd: DAILY_COST_LIMIT_USD,
+      },
+    });
+  } catch (err) {
+    console.error("[malyan-ai-chat] unexpected error:", err);
+    return jsonResponse({ ok: false, code: "INTERNAL_ERROR", error: "Internal server error" }, 500);
+  }
 });

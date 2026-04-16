@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { Stack, useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Component, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -17,9 +17,10 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { colors, radii, spacing } from "../lib/theme";
+import { colors, radii, shadows, spacing } from "../lib/theme";
 import { MalyanLogo } from "../components/MalyanLogo";
 import { useCartStore } from "../store/cartStore";
+import { supabase } from "../lib/supabase";
 import {
   getLatestConversation,
   getTodayAiUsage,
@@ -31,6 +32,52 @@ import {
 } from "../lib/malyan-ai";
 
 type Pref = "natural" | "artificial" | "mixed";
+
+class AiErrorBoundary extends Component<
+  { children: ReactNode },
+  { hasError: boolean; errorText: string }
+> {
+  state = { hasError: false, errorText: "" };
+
+  static getDerivedStateFromError(err: unknown) {
+    const text = err instanceof Error ? err.message : "Unknown UI error";
+    return { hasError: true, errorText: text };
+  }
+
+  componentDidCatch(err: unknown) {
+    console.log("[malyan-ai] UI error boundary:", err);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <SafeAreaView style={styles.screen} edges={["bottom"]}>
+          <View style={styles.errorFallback}>
+            <LinearGradient
+              colors={[colors.surface, colors.bgElevated]}
+              style={styles.errorFallbackCard}
+            >
+              <Ionicons name="warning-outline" size={28} color={colors.red400} />
+              <Text style={styles.errorFallbackTitle}>تعذر عرض مليان الذكي</Text>
+              <Text style={styles.errorFallbackSub}>
+                {this.state.errorText || "حدث خطأ غير متوقع."}
+              </Text>
+              <Pressable
+                style={styles.errorFallbackBtn}
+                onPress={() => {
+                  this.setState({ hasError: false, errorText: "" });
+                }}
+              >
+                <Text style={styles.errorFallbackBtnText}>حاول مرة أخرى</Text>
+              </Pressable>
+            </LinearGradient>
+          </View>
+        </SafeAreaView>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 function TypingDots() {
   const anim = useRef(new Animated.Value(0)).current;
@@ -150,6 +197,9 @@ export default function MalyanAiScreen() {
   const router = useRouter();
   const addItem = useCartStore((s) => s.addItem);
 
+  const [checkingSession, setCheckingSession] = useState(true);
+  const [sessionOk, setSessionOk] = useState(false);
+
   const [pref, setPref] = useState<Pref>("mixed");
   const [messages, setMessages] = useState<ChatUiMessage[]>([]);
   const [conversationId, setConversationId] = useState<string>("");
@@ -166,6 +216,29 @@ export default function MalyanAiScreen() {
     if (usage.remaining_messages <= 0) return "تبقى لك 0 رسالة اليوم";
     return `تبقى لك ${usage.remaining_messages} رسالة اليوم`;
   }, [usage]);
+
+  useEffect(() => {
+    let mounted = true;
+    const run = async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (!mounted) return;
+        const ok = Boolean(data.session);
+        setSessionOk(ok);
+        setCheckingSession(false);
+        if (!ok) router.replace("/login");
+      } catch (e) {
+        if (!mounted) return;
+        setSessionOk(false);
+        setCheckingSession(false);
+        router.replace("/login");
+      }
+    };
+    void run();
+    return () => {
+      mounted = false;
+    };
+  }, [router]);
 
   useEffect(() => {
     let mounted = true;
@@ -324,172 +397,195 @@ export default function MalyanAiScreen() {
   }
 
   return (
-    <>
-      <Stack.Screen options={{ title: "مليان الذكي" }} />
-      <SafeAreaView style={styles.screen} edges={["bottom"]}>
-        <View style={styles.header}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-            <Pressable onPress={() => router.back()} style={styles.backBtn}>
-              <Ionicons name="chevron-back" size={18} color={colors.white} />
-            </Pressable>
-            <MalyanLogo size="sm" />
-          </View>
-
-          <View style={{ alignItems: "flex-end" }}>
-            {remainingLabel ? (
-              <Text style={styles.remainingText}>{remainingLabel}</Text>
-            ) : (
-              <Text style={styles.remainingText}>جاري تحميل الاستخدام…</Text>
-            )}
-            {error ? <Text style={styles.errorText}>{error}</Text> : null}
-          </View>
-        </View>
-
-        <View style={styles.prefRow}>
-          <Text style={styles.prefLabel}>تفضيلك:</Text>
-          <View style={styles.prefPills}>
-            {(
-              [
-                { id: "natural", label: "طبيعي" },
-                { id: "mixed", label: "مختلط" },
-                { id: "artificial", label: "صناعي" },
-              ] as const
-            ).map((p) => (
-              <Pressable
-                key={p.id}
-                style={({ pressed }) => [
-                  styles.prefPill,
-                  pref === p.id && styles.prefPillOn,
-                  pressed && { opacity: 0.92 },
-                ]}
-                onPress={() => setPref(p.id)}
-              >
-                <Text style={styles.prefPillText}>{p.label}</Text>
-              </Pressable>
-            ))}
-          </View>
-        </View>
-
-        <ScrollView
-          ref={scrollRef}
-          style={styles.chatScroll}
-          contentContainerStyle={styles.chatPad}
-          showsVerticalScrollIndicator={false}
-        >
-          {messages.length === 0 ? (
-            <View style={styles.emptyWrap}>
-              <LinearGradient colors={[colors.surface, colors.bgElevated]} style={styles.emptyCard}>
-                <Ionicons name="sparkles" size={34} color={colors.gold} />
-                <Text style={styles.emptyTitle}>اسأل مليان الذكي…</Text>
-                <Text style={styles.emptySub}>
-                  وصف المساحة أو أرسل صورة وسنقترح حلول نباتات وديكور مناسبة لجو قطر.
-                </Text>
-              </LinearGradient>
+    <AiErrorBoundary>
+      <>
+        <Stack.Screen options={{ title: "مليان الذكي" }} />
+        <SafeAreaView style={styles.screen} edges={["bottom"]}>
+          {checkingSession ? (
+            <View style={styles.centered}>
+              <ActivityIndicator size="large" color={colors.gold} />
+              <Text style={styles.centeredText}>جاري التحقق من الجلسة…</Text>
             </View>
-          ) : null}
+          ) : sessionOk ? (
+            <>
+              <View style={styles.header}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                  <Pressable onPress={() => router.back()} style={styles.backBtn}>
+                    <Ionicons name="chevron-back" size={18} color={colors.white} />
+                  </Pressable>
+                  <MalyanLogo size="sm" />
+                </View>
 
-          {messages.map((m) => (
-            <View key={m.id} style={m.role === "user" ? styles.userRow : styles.aiRow}>
-              <View
-                style={[
-                  styles.bubble,
-                  m.role === "user" ? styles.bubbleUser : styles.bubbleAi,
-                ]}
+                <View style={{ alignItems: "flex-end" }}>
+                  {remainingLabel ? (
+                    <Text style={styles.remainingText}>{remainingLabel}</Text>
+                  ) : (
+                    <Text style={styles.remainingText}>جاري تحميل الاستخدام…</Text>
+                  )}
+                  {error ? <Text style={styles.errorText}>{error}</Text> : null}
+                </View>
+              </View>
+
+              <View style={styles.prefRow}>
+                <Text style={styles.prefLabel}>تفضيلك:</Text>
+                <View style={styles.prefPills}>
+                  {(
+                    [
+                      { id: "natural", label: "طبيعي" },
+                      { id: "mixed", label: "مختلط" },
+                      { id: "artificial", label: "صناعي" },
+                    ] as const
+                  ).map((p) => (
+                    <Pressable
+                      key={p.id}
+                      style={({ pressed }) => [
+                        styles.prefPill,
+                        pref === p.id && styles.prefPillOn,
+                        pressed && { opacity: 0.92 },
+                      ]}
+                      onPress={() => setPref(p.id)}
+                    >
+                      <Text style={styles.prefPillText}>{p.label}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+
+              <ScrollView
+                ref={scrollRef}
+                style={styles.chatScroll}
+                contentContainerStyle={styles.chatPad}
+                showsVerticalScrollIndicator={false}
               >
-                <Text style={m.role === "user" ? styles.bubbleUserText : styles.bubbleAiText}>
-                  {m.content}
-                </Text>
-
-                {m.role === "assistant" && m.recommendations && m.recommendations.length > 0 ? (
-                  <View style={styles.recWrap}>
-                    <Text style={styles.recHeader}>توصيات المنتجات</Text>
-                    {m.recommendations.map((rec, idx) => (
-                      <RecommendationRow
-                        key={`${rec.requested_name}-${idx}`}
-                        rec={rec}
-                        onAdd={(productId, params) => void handleAddToCart(productId, params)}
-                        onRequest={() => handleRequest(rec)}
-                      />
-                    ))}
+                {messages.length === 0 ? (
+                  <View style={styles.emptyWrap}>
+                    <LinearGradient
+                      colors={[colors.surface, colors.bgElevated]}
+                      style={styles.emptyCard}
+                    >
+                      <Ionicons name="sparkles" size={34} color={colors.gold} />
+                      <Text style={styles.emptyTitle}>اسأل مليان الذكي…</Text>
+                      <Text style={styles.emptySub}>
+                        وصف المساحة أو أرسل صورة وسنقترح حلول نباتات وديكور مناسبة لجو قطر.
+                      </Text>
+                    </LinearGradient>
                   </View>
                 ) : null}
-              </View>
-            </View>
-          ))}
 
-          {typing ? (
-            <View style={styles.aiRow}>
-              <View style={[styles.bubble, styles.bubbleAi]}>
-                <TypingDots />
-              </View>
-            </View>
-          ) : null}
-        </ScrollView>
+                {messages.map((m) => (
+                  <View key={m.id} style={m.role === "user" ? styles.userRow : styles.aiRow}>
+                    <View
+                      style={[
+                        styles.bubble,
+                        m.role === "user" ? styles.bubbleUser : styles.bubbleAi,
+                      ]}
+                    >
+                      <Text
+                        style={
+                          m.role === "user" ? styles.bubbleUserText : styles.bubbleAiText
+                        }
+                      >
+                        {m.content}
+                      </Text>
 
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          style={styles.inputArea}
-        >
-          <View style={styles.inputTopRow}>
-            <Pressable style={styles.photoBtn} onPress={() => void pickImage()}>
-              <Ionicons name="image-outline" size={20} color={colors.gold} />
-              <Text style={styles.photoBtnText}>صورة</Text>
-            </Pressable>
-            {selectedImageBase64 ? (
-              <Pressable
-                style={styles.clearPhotoBtn}
-                onPress={() => setSelectedImageBase64(null)}
+                      {m.role === "assistant" &&
+                      m.recommendations &&
+                      m.recommendations.length > 0 ? (
+                        <View style={styles.recWrap}>
+                          <Text style={styles.recHeader}>توصيات المنتجات</Text>
+                          {m.recommendations.map((rec, idx) => (
+                            <RecommendationRow
+                              key={`${rec.requested_name}-${idx}`}
+                              rec={rec}
+                              onAdd={(productId, params) =>
+                                void handleAddToCart(productId, params)
+                              }
+                              onRequest={() => handleRequest(rec)}
+                            />
+                          ))}
+                        </View>
+                      ) : null}
+                    </View>
+                  </View>
+                ))}
+
+                {typing ? (
+                  <View style={styles.aiRow}>
+                    <View style={[styles.bubble, styles.bubbleAi]}>
+                      <TypingDots />
+                    </View>
+                  </View>
+                ) : null}
+              </ScrollView>
+
+              <KeyboardAvoidingView
+                behavior={Platform.OS === "ios" ? "padding" : undefined}
+                style={styles.inputArea}
               >
-                <Ionicons name="close" size={18} color={colors.red400} />
-                <Text style={styles.clearPhotoText}>إزالة</Text>
-              </Pressable>
-            ) : null}
-          </View>
+                <View style={styles.inputTopRow}>
+                  <Pressable style={styles.photoBtn} onPress={() => void pickImage()}>
+                    <Ionicons name="image-outline" size={20} color={colors.gold} />
+                    <Text style={styles.photoBtnText}>صورة</Text>
+                  </Pressable>
+                  {selectedImageBase64 ? (
+                    <Pressable
+                      style={styles.clearPhotoBtn}
+                      onPress={() => setSelectedImageBase64(null)}
+                    >
+                      <Ionicons name="close" size={18} color={colors.red400} />
+                      <Text style={styles.clearPhotoText}>إزالة</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
 
-          <View style={styles.composer}>
-            <TextInput
-              value={input}
-              onChangeText={setInput}
-              placeholder="اكتب سؤالك…"
-              placeholderTextColor={colors.textMuted}
-              style={styles.input}
-              multiline
-            />
-            <Pressable
-              style={({ pressed }) => [
-                styles.sendBtn,
-                pressed && { opacity: 0.92 },
-                typing && { opacity: 0.6 },
-              ]}
-              onPress={() => void sendMessage()}
-              disabled={typing}
-            >
-              {typing ? (
-                <ActivityIndicator color={colors.bg} />
-              ) : (
-                <Ionicons name="send" size={18} color={colors.bg} />
-              )}
-            </Pressable>
-          </View>
+                <View style={styles.composer}>
+                  <TextInput
+                    value={input}
+                    onChangeText={setInput}
+                    placeholder="اكتب سؤالك…"
+                    placeholderTextColor={colors.textMuted}
+                    style={styles.input}
+                    multiline
+                  />
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.sendBtn,
+                      pressed && { opacity: 0.92 },
+                      typing && { opacity: 0.6 },
+                    ]}
+                    onPress={() => void sendMessage()}
+                    disabled={typing}
+                  >
+                    {typing ? (
+                      <ActivityIndicator color={colors.bg} />
+                    ) : (
+                      <Ionicons name="send" size={18} color={colors.bg} />
+                    )}
+                  </Pressable>
+                </View>
 
-          <Text style={styles.helpText}>
-            {pref === "natural"
-              ? "نقترح نباتات طبيعية قدر الإمكان."
-              : pref === "artificial"
-                ? "نقترح نباتات صناعية مناسبة للعناية السهلة."
-                : "نقترح حلول طبيعية/صناعية بحسب الأفضل لمساحتك."}
-          </Text>
+                <Text style={styles.helpText}>
+                  {pref === "natural"
+                    ? "نقترح نباتات طبيعية قدر الإمكان."
+                    : pref === "artificial"
+                      ? "نقترح نباتات صناعية مناسبة للعناية السهلة."
+                      : "نقترح حلول طبيعية/صناعية بحسب الأفضل لمساحتك."}
+                </Text>
 
-          {/* Spacer for iOS input */}
-          <View style={{ height: 10 }} />
-        </KeyboardAvoidingView>
-      </SafeAreaView>
-    </>
+                <View style={{ height: 10 }} />
+              </KeyboardAvoidingView>
+            </>
+          ) : null}
+        </SafeAreaView>
+      </>
+    </AiErrorBoundary>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
+  centered: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
+  centeredText: { color: colors.textSecondary, fontWeight: "800", textAlign: "center" },
   header: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
@@ -620,5 +716,32 @@ const styles = StyleSheet.create({
     ...shadows.goldGlow,
   },
   helpText: { color: colors.textMuted, marginTop: 8, textAlign: "right", fontSize: 12, lineHeight: 18 },
+  errorFallback: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: spacing.lg,
+  },
+  errorFallbackCard: {
+    width: "100%",
+    borderRadius: radii.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.lg,
+    alignItems: "center",
+    gap: 10,
+  },
+  errorFallbackTitle: { color: colors.white, fontWeight: "900", fontSize: 16, textAlign: "center" },
+  errorFallbackSub: { color: colors.textSecondary, fontWeight: "700", fontSize: 12, textAlign: "center", lineHeight: 18 },
+  errorFallbackBtn: {
+    backgroundColor: colors.brand,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.goldMuted,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    marginTop: 10,
+  },
+  errorFallbackBtnText: { color: colors.bg, fontWeight: "900" },
 });
 
