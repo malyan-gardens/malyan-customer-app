@@ -99,16 +99,7 @@ export default function DesignScreen() {
 
           <Pressable
             style={styles.aiBtn}
-            onPress={() =>
-              router.push({
-                pathname: "/(tabs)/assistant",
-                params: {
-                  from: "design",
-                  initialContext:
-                    "أنا مصمم الديكور الذكي لمليان للحدائق. أخبرني عن مساحتك (المساحة بالمتر، الميزانية، النمط المفضل) وسأقترح لك أفضل المنتجات والتصميم.",
-                },
-              })
-            }
+            onPress={() => router.push("/ai-design-wizard")}
           >
             <Text style={styles.aiBtnText}>🤖 مساعد التصميم الذكي</Text>
             <Text style={styles.aiHint}>

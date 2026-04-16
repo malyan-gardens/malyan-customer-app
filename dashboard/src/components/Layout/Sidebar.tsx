@@ -11,6 +11,7 @@ const links = [
   { to: '/promotions',    label: '🎁 العروض' },
   { to: '/finance',       label: '💰 المالية' },
   { to: '/notifications', label: '🔔 الإشعارات' },
+  { to: '/ai',            label: '🤖 مليان الذكي' },
 ];
 
 export default function Sidebar() {

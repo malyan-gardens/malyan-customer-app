@@ -11,6 +11,7 @@ import Maintenance from './pages/Maintenance/index';
 import Design from './pages/Design/index';
 import Promotions from './pages/Promotions/index';
 import Notifications from './pages/Notifications/index';
+import AiDashboardPage from './pages/AI/index';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -56,6 +57,7 @@ export default function App() {
           <Route path="design" element={<Design />} />
           <Route path="promotions" element={<Promotions />} />
           <Route path="notifications" element={<Notifications />} />
+          <Route path="ai" element={<AiDashboardPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>

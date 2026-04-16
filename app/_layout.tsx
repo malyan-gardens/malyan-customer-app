@@ -33,6 +33,16 @@ export default function RootLayout() {
         <Stack.Screen name="phone-input" options={{ title: "تسجيل برقم الهاتف" }} />
         <Stack.Screen name="otp-verify" options={{ title: "تأكيد OTP" }} />
         <Stack.Screen name="auth/callback" options={{ headerShown: false }} />
+        <Stack.Screen name="malyan-ai" options={{ headerShown: false }} />
+        <Stack.Screen
+          name="ai-design-wizard"
+          options={{ title: "تصميم ذكي للمساحات" }}
+        />
+        <Stack.Screen
+          name="ai-plant-doctor"
+          options={{ title: "طبيب النباتات الذكي" }}
+        />
+        <Stack.Screen name="ai-my-designs" options={{ title: "تصاميمي" }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen
           name="product/[id]"

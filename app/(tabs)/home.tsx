@@ -8,6 +8,7 @@ import {
   FlatList,
   Image,
   ListRenderItem,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -372,6 +373,13 @@ export default function HomeScreen() {
         }
         renderItem={renderProduct}
       />
+
+      <Pressable
+        style={styles.fab}
+        onPress={() => router.push("/malyan-ai")}
+      >
+        <Ionicons name="sparkles" size={22} color={colors.bg} />
+      </Pressable>
     </SafeAreaView>
   );
 }
@@ -646,5 +654,19 @@ const styles = StyleSheet.create({
     textAlign: "center",
     paddingVertical: 40,
     paddingHorizontal: spacing.md,
+  },
+  fab: {
+    position: "absolute",
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    right: spacing.lg,
+    bottom: Platform.OS === "ios" ? 120 : 92,
+    backgroundColor: colors.brand,
+    borderWidth: 1,
+    borderColor: colors.goldMuted,
+    alignItems: "center",
+    justifyContent: "center",
+    ...shadows.goldGlow,
   },
 });

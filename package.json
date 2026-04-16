@@ -15,6 +15,7 @@
     "supabase:deploy:otp": "npx --yes supabase@latest functions deploy send-whatsapp-otp verify-whatsapp-otp --project-ref pjhvbtmceaesxyoutgbr",
     "supabase:logs:send": "npx --yes supabase@latest functions logs send-whatsapp-otp --project-ref pjhvbtmceaesxyoutgbr",
     "supabase:logs:verify": "npx --yes supabase@latest functions logs verify-whatsapp-otp --project-ref pjhvbtmceaesxyoutgbr",
+    "supabase:deploy:ai": "npx --yes supabase@latest functions deploy malyan-ai-chat --project-ref pjhvbtmceaesxyoutgbr",
     "supabase:secrets:twilio": "echo Set TWILIO_* via Dashboard or: npx supabase@latest secrets set --project-ref pjhvbtmceaesxyoutgbr KEY=value"
   },
   "dependencies": {
@@ -23,6 +24,7 @@
     "expo": "^54.0.0",
     "expo-auth-session": "~7.0.10",
     "expo-constants": "~18.0.13",
+    "expo-image-picker": "~17.0.10",
     "expo-linear-gradient": "~15.0.8",
     "expo-linking": "~8.0.11",
     "expo-location": "~19.0.8",
