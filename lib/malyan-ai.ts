@@ -1,4 +1,3 @@
-import { describeFunctionInvokeError } from "./function-invoke-error";
 import { supabase } from "./supabase";
 
 export type ChatRole = "user" | "assistant";
@@ -117,9 +116,7 @@ export async function invokeMalyanAi(payload: InvokeAiPayload): Promise<InvokeAi
     }
   } catch (err) {
     if (err instanceof Error) throw err;
-    throw new Error(
-      describeFunctionInvokeError(err) || "تعذر الاتصال بخدمة مليان الذكي."
-    );
+    throw new Error("تعذر الاتصال بخدمة مليان الذكي.");
   }
 
   if (!data?.ok) {
