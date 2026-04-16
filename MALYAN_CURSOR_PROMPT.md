@@ -523,6 +523,7 @@ VITE_STRIPE_PUBLIC_KEY=your_stripe_public_key
 ```env
 EXPO_PUBLIC_SUPABASE_URL=your_supabase_project_url
 EXPO_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+EXPO_PUBLIC_ANTHROPIC_API_KEY=your_anthropic_api_key
 EXPO_PUBLIC_STRIPE_PUBLIC_KEY=your_stripe_public_key
 CLAUDE_API_KEY=your_claude_api_key
 ```
