@@ -180,7 +180,17 @@ export default function AiDesignWizardScreen() {
     }
   }
 
-  async function handleAddToCart(productId: string, product: { name: string; price: number; currency: string; imageUrl?: string | null; maxQuantity?: number | null }) {
+  async function handleAddToCart(
+    productId: string,
+    product: {
+      name: string;
+      price: number;
+      currency: string;
+      imageUrl?: string | null;
+      maxQuantity?: number | null;
+      category?: string | null;
+    }
+  ) {
     addItem({
       productId,
       name: product.name,
@@ -191,6 +201,7 @@ export default function AiDesignWizardScreen() {
       quantity: 1,
       maxQuantity:
         product.maxQuantity != null && product.maxQuantity >= 0 ? product.maxQuantity : undefined,
+      category: product.category ?? null,
     });
     Alert.alert("تم", "تمت إضافة المنتج للسلة.", [{ text: "حسناً" }]);
   }
@@ -354,6 +365,7 @@ export default function AiDesignWizardScreen() {
                                   currency: product.currency ?? "QAR",
                                   imageUrl: product.image_url,
                                   maxQuantity: product.quantity,
+                                  category: product.category ?? null,
                                 })
                               }
                             >

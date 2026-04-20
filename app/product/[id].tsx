@@ -110,6 +110,7 @@ export default function ProductDetailScreen() {
       imageUrl: product.image_url,
       quantity: qty,
       maxQuantity: maxStock != null && maxStock >= 0 ? maxStock : undefined,
+      category: product.category ?? null,
     });
     Alert.alert("تمت الإضافة للسلة ✓");
   };

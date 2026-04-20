@@ -12,6 +12,7 @@ export type CartLine = {
   quantity: number;
   /** When set, cart quantity cannot exceed inventory */
   maxQuantity?: number | null;
+  category?: string | null;
 };
 
 type CartState = {
@@ -60,7 +61,12 @@ export const useCartStore = create<CartState>()(
           set({
             items: get().items.map((i) =>
               i.productId === line.productId
-                ? { ...i, quantity: newQty, maxQuantity: mergedMax }
+                ? {
+                    ...i,
+                    quantity: newQty,
+                    maxQuantity: mergedMax,
+                    category: line.category ?? i.category,
+                  }
                 : i
             ),
           });
@@ -86,6 +92,7 @@ export const useCartStore = create<CartState>()(
                 imageUrl: line.imageUrl,
                 quantity: initial,
                 maxQuantity: maxQ,
+                category: line.category ?? null,
               },
             ],
           });

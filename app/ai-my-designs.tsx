@@ -83,6 +83,7 @@ export default function AiMyDesignsScreen() {
         quantity: 1,
         maxQuantity:
           product.quantity != null && product.quantity >= 0 ? product.quantity : undefined,
+        category: product.category ?? null,
       });
     });
 

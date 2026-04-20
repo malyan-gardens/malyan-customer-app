@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Image,
   Platform,
@@ -15,6 +15,12 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { GuestModal } from "../../components/GuestModal";
 import { useAuthStore } from "../../lib/authStore";
 import { colors, radii, spacing } from "../../lib/theme";
+import {
+  calculateBestDiscount,
+  getActivePromotions,
+  type CartItemForDiscount,
+  type Promotion,
+} from "../../lib/promotions";
 import { cartTotal, useCartStore, type CartLine } from "../../store/cartStore";
 
 export default function CartScreen() {
@@ -25,13 +31,48 @@ export default function CartScreen() {
   const removeItem = useCartStore((s) => s.removeItem);
   const total = cartTotal(items);
   const [guestOpen, setGuestOpen] = useState(false);
+  const [promotions, setPromotions] = useState<Promotion[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const list = await getActivePromotions();
+      if (!cancelled) setPromotions(list);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const discountInput = useMemo((): CartItemForDiscount[] => {
+    return items.map((i) => ({
+      productId: i.productId,
+      name: i.nameAr ?? i.name,
+      price: i.price,
+      quantity: i.quantity,
+      category: i.category,
+    }));
+  }, [items]);
+
+  const discountResult = useMemo(
+    () => calculateBestDiscount(discountInput, promotions),
+    [discountInput, promotions]
+  );
 
   const onCheckout = () => {
     if (!session) {
       setGuestOpen(true);
       return;
     }
-    router.push("/checkout");
+    router.push({
+      pathname: "/checkout",
+      params: {
+        finalTotal: String(discountResult.finalTotal),
+        appliedPromotionId: discountResult.appliedPromotion?.id ?? "",
+        discountAmount: String(discountResult.discountAmount),
+        discountLabel: discountResult.discountLabel,
+      },
+    });
   };
 
   return (
@@ -84,12 +125,30 @@ export default function CartScreen() {
 
       {items.length > 0 && (
         <View style={styles.footer}>
-          <Text style={styles.totalLine}>
-            الإجمالي:{" "}
-            <Text style={styles.totalGold}>
-              {total.toFixed(2)} QAR
+          {discountResult.discountAmount > 0 && discountResult.discountLabel ? (
+            <View style={styles.discountPill}>
+              <Text style={styles.discountPillText}>{discountResult.discountLabel}</Text>
+            </View>
+          ) : null}
+          {discountResult.discountAmount > 0 ? (
+            <>
+              <Text style={styles.totalLineMuted}>
+                المجموع:{" "}
+                <Text style={styles.totalStruck}>
+                  {discountResult.originalTotal.toFixed(2)} QAR
+                </Text>
+              </Text>
+              <Text style={styles.afterDiscountLine}>
+                بعد الخصم:{" "}
+                <Text style={styles.totalGoldLarge}>{discountResult.finalTotal.toFixed(2)} QAR</Text>
+              </Text>
+            </>
+          ) : (
+            <Text style={styles.totalLine}>
+              الإجمالي:{" "}
+              <Text style={styles.totalGold}>{total.toFixed(2)} QAR</Text>
             </Text>
-          </Text>
+          )}
           <Pressable style={styles.checkoutBtn} onPress={onCheckout}>
             <Text style={styles.checkoutText}>إتمام الطلب</Text>
           </Pressable>
@@ -318,7 +377,44 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
     paddingBottom: spacing.lg,
   },
+  discountPill: {
+    alignSelf: "flex-end",
+    backgroundColor: colors.brand,
+    borderRadius: radii.lg,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 10,
+    maxWidth: "100%",
+  },
+  discountPillText: {
+    color: colors.white,
+    fontWeight: "700",
+    fontSize: 13,
+    textAlign: "right",
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
+  },
   totalLine: {
+    color: colors.white,
+    fontSize: 16,
+    fontWeight: "700",
+    textAlign: "right",
+    marginBottom: 12,
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
+  },
+  totalLineMuted: {
+    color: colors.textMuted,
+    fontSize: 16,
+    fontWeight: "700",
+    textAlign: "right",
+    marginBottom: 6,
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
+  },
+  totalStruck: {
+    textDecorationLine: "line-through",
+    color: colors.textMuted,
+    fontWeight: "700",
+  },
+  afterDiscountLine: {
     color: colors.white,
     fontSize: 16,
     fontWeight: "700",
@@ -330,6 +426,11 @@ const styles = StyleSheet.create({
     color: colors.gold,
     fontWeight: "800",
     fontSize: 18,
+  },
+  totalGoldLarge: {
+    color: colors.gold,
+    fontWeight: "800",
+    fontSize: 20,
   },
   checkoutBtn: {
     backgroundColor: colors.brand,

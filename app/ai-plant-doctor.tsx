@@ -81,6 +81,7 @@ export default function AiPlantDoctorScreen() {
     currency: string;
     imageUrl?: string | null;
     maxQuantity?: number | null;
+    category?: string | null;
   }) {
     addItem({
       productId: product.id,
@@ -94,6 +95,7 @@ export default function AiPlantDoctorScreen() {
         product.maxQuantity != null && product.maxQuantity >= 0
           ? product.maxQuantity
           : undefined,
+      category: product.category ?? null,
     });
     Alert.alert("تم", "تمت الإضافة للسلة.", [{ text: "حسناً" }]);
   }
@@ -108,6 +110,7 @@ export default function AiPlantDoctorScreen() {
       currency: product.currency ?? "QAR",
       imageUrl: product.image_url,
       maxQuantity: product.quantity,
+      category: product.category ?? null,
     });
   }
 

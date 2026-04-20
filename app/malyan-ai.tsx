@@ -116,7 +116,17 @@ function RecommendationRow({
   onRequest,
 }: {
   rec: AiRecommendation;
-  onAdd: (productId: string, params: { name: string; price: number; currency: string; imageUrl?: string | null; maxQuantity?: number | null }) => void;
+  onAdd: (
+    productId: string,
+    params: {
+      name: string;
+      price: number;
+      currency: string;
+      imageUrl?: string | null;
+      maxQuantity?: number | null;
+      category?: string | null;
+    }
+  ) => void;
   onRequest: () => Promise<void>;
 }) {
   const matched = rec.matched_product;
@@ -168,6 +178,7 @@ function RecommendationRow({
                 currency: product.currency ?? "QAR",
                 imageUrl: product.image_url,
                 maxQuantity: product.quantity,
+                category: product.category ?? null,
               });
             }}
           >
@@ -277,7 +288,17 @@ export default function MalyanAiScreen() {
     }
   }
 
-  async function handleAddToCart(productId: string, params: { name: string; price: number; currency: string; imageUrl?: string | null; maxQuantity?: number | null }) {
+  async function handleAddToCart(
+    productId: string,
+    params: {
+      name: string;
+      price: number;
+      currency: string;
+      imageUrl?: string | null;
+      maxQuantity?: number | null;
+      category?: string | null;
+    }
+  ) {
     if (isGuest || !session) {
       Alert.alert("سجل دخولك أولاً", "", [
         { text: "حسناً", onPress: () => router.push("/login") },
@@ -293,6 +314,7 @@ export default function MalyanAiScreen() {
       imageUrl: params.imageUrl,
       quantity: 1,
       maxQuantity: params.maxQuantity != null && params.maxQuantity >= 0 ? params.maxQuantity : undefined,
+      category: params.category ?? null,
     });
     Alert.alert("تم", "تمت إضافة المنتج للسلة بنجاح.", [{ text: "حسناً" }]);
   }

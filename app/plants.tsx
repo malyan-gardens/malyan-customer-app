@@ -154,6 +154,7 @@ export default function PlantsScreen() {
                                 item.quantity != null && item.quantity >= 0
                                   ? item.quantity
                                   : undefined,
+                              category: item.category ?? null,
                             })
                           }
                         />

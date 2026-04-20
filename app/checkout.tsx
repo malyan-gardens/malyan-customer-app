@@ -29,6 +29,10 @@ export default function CheckoutScreen() {
     productName?: string;
     productPrice?: string;
     productCurrency?: string;
+    finalTotal?: string;
+    appliedPromotionId?: string;
+    discountAmount?: string;
+    discountLabel?: string;
   }>();
   const items = useCartStore((s) => s.items);
   const setCustomerStep = useCheckoutDraftStore((s) => s.setCustomerStep);
@@ -46,7 +50,18 @@ export default function CheckoutScreen() {
   }, [params.productId, params.productName, params.productPrice, params.productCurrency]);
 
   const orderItems = directProduct ? [directProduct] : items;
-  const total = cartTotal(orderItems);
+  const originalTotal = cartTotal(orderItems);
+  const discountAmount = Math.max(0, Number(params.discountAmount ?? 0) || 0);
+  const finalTotalParam =
+    params.finalTotal != null && params.finalTotal !== ""
+      ? Number(params.finalTotal)
+      : NaN;
+  const summaryFinal = !Number.isNaN(finalTotalParam)
+    ? finalTotalParam
+    : discountAmount > 0
+      ? Math.max(0, originalTotal - discountAmount)
+      : originalTotal;
+  const discountLabel = params.discountLabel ? String(params.discountLabel) : "";
 
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
@@ -134,10 +149,26 @@ export default function CheckoutScreen() {
               </View>
             );
           })}
-          <View style={styles.totalBar}>
-            <Text style={styles.totalVal}>{total.toFixed(2)} QAR</Text>
-            <Text style={styles.totalLabel}>الإجمالي</Text>
-          </View>
+          <Text style={styles.originalTotalLabel}>المجموع الأصلي: {originalTotal.toFixed(2)} QAR</Text>
+          {discountAmount > 0 ? (
+            <>
+              <View style={styles.discountRow}>
+                <Text style={styles.discountRowText}>
+                  - {discountAmount.toFixed(2)} QAR | {discountLabel}
+                </Text>
+              </View>
+              <View style={styles.summaryDivider} />
+              <View style={styles.finalTotalRow}>
+                <Text style={styles.finalTotalLarge}>
+                  الإجمالي بعد الخصم: {summaryFinal.toFixed(2)} QAR
+                </Text>
+              </View>
+            </>
+          ) : (
+            <View style={styles.finalTotalRow}>
+              <Text style={styles.finalTotalLarge}>الإجمالي: {summaryFinal.toFixed(2)} QAR</Text>
+            </View>
+          )}
 
           <Text style={styles.hintBlock}>
             في الخطوة التالية سنطلب إذن الموقع لعرض موقع التوصيل على الخريطة واختيار طريقة الدفع.
@@ -237,21 +268,41 @@ const styles = StyleSheet.create({
     minWidth: 88,
     textAlign: "left",
   },
-  totalBar: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+  originalTotalLabel: {
+    color: colors.textSecondary,
+    textAlign: "right",
+    fontSize: 15,
     marginTop: 16,
-    marginBottom: 8,
-    paddingVertical: 14,
-    paddingHorizontal: 14,
-    backgroundColor: colors.surface,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: colors.border,
+    marginBottom: 10,
   },
-  totalLabel: { color: colors.white, fontWeight: "800", fontSize: 16 },
-  totalVal: { color: colors.gold, fontWeight: "800", fontSize: 20 },
+  discountRow: {
+    backgroundColor: colors.brand,
+    borderRadius: radii.md,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 10,
+  },
+  discountRowText: {
+    color: colors.white,
+    fontWeight: "700",
+    textAlign: "right",
+    fontSize: 14,
+  },
+  summaryDivider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginBottom: 12,
+  },
+  finalTotalRow: {
+    marginBottom: 8,
+    alignItems: "flex-end",
+  },
+  finalTotalLarge: {
+    color: colors.gold,
+    fontWeight: "800",
+    fontSize: 22,
+    textAlign: "right",
+  },
   label: {
     color: colors.textSecondary,
     textAlign: "right",

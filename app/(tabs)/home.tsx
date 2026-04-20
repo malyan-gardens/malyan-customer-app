@@ -21,6 +21,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { GuestModal } from "../../components/GuestModal";
 import { MalyanLogo } from "../../components/MalyanLogo";
+import { getActivePromotions, heroPromotionBadge } from "../../lib/promotions";
 import { supabase } from "../../lib/supabase";
 import { colors, radii, shadows, spacing } from "../../lib/theme";
 import type { InventoryRow } from "../../lib/types";
@@ -39,17 +40,9 @@ type BannerSlide = {
   key: string;
   title: string;
   sub: string;
-  discount?: string | null;
+  typeBadge?: string | null;
   endDate?: string | null;
   colors: readonly [string, string, string];
-};
-
-type PromotionRow = {
-  id: string;
-  title?: string | null;
-  description?: string | null;
-  discount_info?: string | null;
-  end_date?: string | null;
 };
 
 const DEFAULT_BANNERS: BannerSlide[] = [
@@ -57,7 +50,6 @@ const DEFAULT_BANNERS: BannerSlide[] = [
     key: "d1",
     title: "🌿 نباتات صناعية فاخرة",
     sub: "أجمل النباتات لمنزلك ومكتبك",
-    discount: null,
     endDate: null,
     colors: ["#145e2f", "#1a7a3c", "#0a0a0a"] as const,
   },
@@ -65,7 +57,6 @@ const DEFAULT_BANNERS: BannerSlide[] = [
     key: "d2",
     title: "🔧 خدمات صيانة متخصصة",
     sub: "فريق متخصص لصيانة حدائقك",
-    discount: null,
     endDate: null,
     colors: ["#063015", "#1a7a3c", "#111"] as const,
   },
@@ -73,7 +64,6 @@ const DEFAULT_BANNERS: BannerSlide[] = [
     key: "d3",
     title: "🎨 تصميم مساحات خضراء",
     sub: "نحول مساحتك لجنة خضراء",
-    discount: null,
     endDate: null,
     colors: ["#1a7a3c", "#c9a84c33", "#0a0a0a"] as const,
   },
@@ -127,16 +117,12 @@ export default function HomeScreen() {
       setItems((data as InventoryRow[]) ?? []);
     }
 
-    const { data: promoData } = await supabase
-      .from("promotions")
-      .select("id,title,description,discount_info,end_date")
-      .eq("is_active", true)
-      .order("created_at", { ascending: false });
-    const mapped = ((promoData as PromotionRow[] | null) ?? []).map((p, i) => ({
+    const promoList = await getActivePromotions();
+    const mapped = promoList.map((p, i) => ({
       key: p.id,
       title: p.title?.trim() || `عرض خاص ${i + 1}`,
       sub: p.description?.trim() || "استفد من أحدث عروض مليان للحدائق",
-      discount: p.discount_info ?? null,
+      typeBadge: heroPromotionBadge(p),
       endDate: p.end_date ?? null,
       colors: ["#145e2f", "#1a7a3c", "#0a0a0a"] as const,
     }));
@@ -229,6 +215,7 @@ export default function HomeScreen() {
                   imageUrl: item.image_url,
                   quantity: 1,
                   maxQuantity: maxQ != null && maxQ >= 0 ? maxQ : undefined,
+                  category: item.category ?? null,
                 });
               }}
               style={({ pressed }) => [styles.addMini, pressed && { opacity: 0.9 }]}
@@ -376,8 +363,10 @@ export default function HomeScreen() {
                   >
                     <Text style={styles.heroTitle}>{slide.title}</Text>
                     <Text style={styles.heroSub}>{slide.sub}</Text>
-                    {slide.discount ? (
-                      <Text style={styles.heroDiscount}>{slide.discount}</Text>
+                    {slide.typeBadge ? (
+                      <View style={styles.heroTypeBadge}>
+                        <Text style={styles.heroTypeBadgeText}>{slide.typeBadge}</Text>
+                      </View>
                     ) : null}
                     {slide.endDate ? (
                       <Text style={styles.heroEndDate}>ينتهي في: {slide.endDate}</Text>
@@ -588,12 +577,20 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
   },
-  heroDiscount: {
-    color: colors.gold,
+  heroTypeBadge: {
+    alignSelf: "flex-end",
+    backgroundColor: colors.gold,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    marginTop: 8,
+  },
+  heroTypeBadgeText: {
+    color: "#000000",
     fontWeight: "800",
-    fontSize: 14,
+    fontSize: 12,
     textAlign: "right",
-    marginTop: 10,
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
   },
   heroEndDate: {
     color: "rgba(255,255,255,0.9)",
