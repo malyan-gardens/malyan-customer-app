@@ -7,6 +7,7 @@ import {
   Dimensions,
   FlatList,
   Image,
+  Linking,
   ListRenderItem,
   Platform,
   Pressable,
@@ -18,10 +19,12 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { GuestModal } from "../../components/GuestModal";
 import { MalyanLogo } from "../../components/MalyanLogo";
+import { supabase } from "../../lib/supabase";
 import { colors, radii, shadows, spacing } from "../../lib/theme";
 import type { InventoryRow } from "../../lib/types";
-import { supabase } from "../../lib/supabase";
+import { useAuthStore } from "../../lib/authStore";
 import { useCartStore } from "../../store/cartStore";
 
 const { width: SCREEN_W } = Dimensions.get("window");
@@ -29,9 +32,9 @@ const GRID_GAP = 12;
 const GRID_H_PAD = spacing.md;
 const COL_WIDTH = (SCREEN_W - GRID_H_PAD * 2 - GRID_GAP) / 2;
 const PRODUCT_IMAGE_H = 180;
-const BANNER_H = 200;
+const BANNER_H = 220;
 
-const HERO_W = SCREEN_W - spacing.md * 2;
+const HERO_W = SCREEN_W;
 type BannerSlide = {
   key: string;
   title: string;
@@ -83,9 +86,24 @@ const CATEGORIES = [
   { key: "offers", emoji: "⭐", label: "العروض", href: "/plants" as const },
 ];
 
+const QUICK_STATS = [
+  { key: "s1", label: "توصيل سريع 🚚" },
+  { key: "s2", label: "ضمان الجودة ⭐" },
+  { key: "s3", label: "دعم 24/7 💬" },
+];
+
+const BRAND_BORDER_44 = `${colors.brand}44`;
+
 export default function HomeScreen() {
   const router = useRouter();
+  const session = useAuthStore((s) => s.session);
+  const isGuest = useAuthStore((s) => s.isGuest);
   const addItem = useCartStore((s) => s.addItem);
+  const cartItemCount = useCartStore((s) =>
+    s.items.reduce((sum, i) => sum + i.quantity, 0)
+  );
+
+  const [showGuestModal, setShowGuestModal] = useState(false);
   const [items, setItems] = useState<InventoryRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -198,6 +216,10 @@ export default function HomeScreen() {
             </Pressable>
             <Pressable
               onPress={() => {
+                if (isGuest) {
+                  setShowGuestModal(true);
+                  return;
+                }
                 addItem({
                   productId: item.id,
                   name: title,
@@ -215,7 +237,11 @@ export default function HomeScreen() {
               <Text style={styles.addMiniText}>أضف للسلة</Text>
             </Pressable>
             <Pressable
-              onPress={() =>
+              onPress={() => {
+                if (isGuest) {
+                  setShowGuestModal(true);
+                  return;
+                }
                 router.push({
                   pathname: "/checkout",
                   params: {
@@ -224,8 +250,8 @@ export default function HomeScreen() {
                     productPrice: String(item.selling_price ?? 0),
                     productCurrency: item.currency ?? "QAR",
                   },
-                })
-              }
+                });
+              }}
               style={({ pressed }) => [styles.buyNowBtn, pressed && { opacity: 0.9 }]}
             >
               <Ionicons name="flash" size={16} color={colors.bg} />
@@ -235,7 +261,35 @@ export default function HomeScreen() {
         </View>
       );
     },
-    [addItem, router]
+    [addItem, isGuest, router]
+  );
+
+  const listFooter = useMemo(
+    () => (
+      <View style={styles.footer}>
+        <Text style={styles.footerLine1}>مليان للتجارة والحدائق</Text>
+        <Text style={styles.footerLine2}>الدوحة، قطر 🇶🇦</Text>
+        <View style={styles.socialRow}>
+          <Pressable
+            onPress={() => void Linking.openURL("https://instagram.com/malyan.tg")}
+          >
+            <Ionicons name="logo-instagram" size={28} color="#E1306C" />
+          </Pressable>
+          <Pressable onPress={() => void Linking.openURL("https://wa.me/97400000000")}>
+            <Ionicons name="logo-whatsapp" size={28} color="#25D366" />
+          </Pressable>
+          <Pressable
+            onPress={() => void Linking.openURL("https://facebook.com/Malyanlandscape")}
+          >
+            <Ionicons name="logo-facebook" size={28} color="#1877F2" />
+          </Pressable>
+        </View>
+        <Text style={styles.footerCopy}>
+          © 2025 مليان للحدائق. جميع الحقوق محفوظة
+        </Text>
+      </View>
+    ),
+    []
   );
 
   if (loading) {
@@ -249,14 +303,36 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.screen} edges={["top"]}>
+      <GuestModal
+        visible={showGuestModal}
+        onClose={() => setShowGuestModal(false)}
+        onLogin={() => {
+          setShowGuestModal(false);
+          router.push("/login");
+        }}
+      />
+
       <View style={styles.topBar}>
-        <Pressable style={styles.iconBtn} onPress={() => {}}>
-          <Ionicons name="notifications-outline" size={22} color={colors.white} />
-        </Pressable>
-        <MalyanLogo size="sm" />
-        <Pressable style={styles.avatar} onPress={() => router.push("/(tabs)/profile")}>
-          <Ionicons name="person" size={20} color={colors.gold} />
-        </Pressable>
+        <View style={styles.topBarSide}>
+          <Pressable style={styles.iconBtn} onPress={() => {}}>
+            <Ionicons name="notifications-outline" size={22} color={colors.white} />
+          </Pressable>
+        </View>
+        <View style={styles.topBarCenter}>
+          <MalyanLogo size="sm" />
+        </View>
+        <View style={[styles.topBarSide, styles.topBarSideEnd]}>
+          <Pressable style={styles.iconBtn} onPress={() => router.push("/(tabs)/cart")}>
+            <Ionicons name="cart-outline" size={22} color={colors.white} />
+            {cartItemCount > 0 ? (
+              <View style={styles.cartBadge}>
+                <Text style={styles.cartBadgeText}>
+                  {cartItemCount > 99 ? "99+" : String(cartItemCount)}
+                </Text>
+              </View>
+            ) : null}
+          </Pressable>
+        </View>
       </View>
 
       <FlatList
@@ -306,6 +382,12 @@ export default function HomeScreen() {
                     {slide.endDate ? (
                       <Text style={styles.heroEndDate}>ينتهي في: {slide.endDate}</Text>
                     ) : null}
+                    <Pressable
+                      onPress={() => router.push("/plants")}
+                      style={({ pressed }) => [styles.heroCta, pressed && { opacity: 0.92 }]}
+                    >
+                      <Text style={styles.heroCtaText}>اكتشف الآن</Text>
+                    </Pressable>
                   </LinearGradient>
                 ))}
               </ScrollView>
@@ -315,6 +397,18 @@ export default function HomeScreen() {
                 ))}
               </View>
             </View>
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.statsScroll}
+            >
+              {QUICK_STATS.map((s) => (
+                <View key={s.key} style={styles.statPill}>
+                  <Text style={styles.statPillText}>{s.label}</Text>
+                </View>
+              ))}
+            </ScrollView>
 
             <View style={styles.searchRow}>
               <Pressable style={styles.filterBtn} onPress={() => router.push("/plants")}>
@@ -342,13 +436,49 @@ export default function HomeScreen() {
                 <Pressable
                   key={c.key}
                   onPress={() => router.push(c.href)}
-                  style={({ pressed }) => [styles.catChip, pressed && { opacity: 0.9 }]}
+                  style={({ pressed }) => [pressed && { opacity: 0.92 }]}
                 >
-                  <Text style={styles.catEmoji}>{c.emoji}</Text>
-                  <Text style={styles.catLabel}>{c.label}</Text>
+                  <LinearGradient
+                    colors={[colors.surface, colors.bgElevated]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.catCard}
+                  >
+                    <Text style={styles.catEmoji}>{c.emoji}</Text>
+                    <Text style={styles.catLabel}>{c.label}</Text>
+                  </LinearGradient>
                 </Pressable>
               ))}
             </ScrollView>
+
+            <Pressable
+              onPress={() => {
+                if (isGuest) {
+                  setShowGuestModal(true);
+                  return;
+                }
+                if (session) {
+                  router.push("/malyan-ai" as never);
+                }
+              }}
+              style={({ pressed }) => [styles.aiBanner, pressed && { opacity: 0.95 }]}
+            >
+              <LinearGradient
+                colors={["#0d3d22", "#1a7a3c", "#063015"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.aiBannerGrad}
+              >
+                <Ionicons name="sparkles" size={32} color={colors.gold} />
+                <View style={styles.aiBannerTextWrap}>
+                  <Text style={styles.aiBannerTitle}>مليان الذكي 🤖</Text>
+                  <Text style={styles.aiBannerSub}>
+                    استشر مساعدنا في النباتات والتصميم
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={22} color={colors.gold} />
+              </LinearGradient>
+            </Pressable>
 
             <View style={styles.sectionHead}>
               <Text style={styles.sectionTitle}>منتجات مميزة</Text>
@@ -361,7 +491,13 @@ export default function HomeScreen() {
               <View style={styles.errorBox}>
                 <Ionicons name="cloud-offline-outline" size={40} color={colors.textMuted} />
                 <Text style={styles.errorText}>{error}</Text>
-                <Pressable style={styles.retry} onPress={() => { setLoading(true); load(); }}>
+                <Pressable
+                  style={styles.retry}
+                  onPress={() => {
+                    setLoading(true);
+                    load();
+                  }}
+                >
                   <Text style={styles.retryText}>إعادة المحاولة</Text>
                 </Pressable>
               </View>
@@ -371,15 +507,9 @@ export default function HomeScreen() {
             ) : null}
           </>
         }
+        ListFooterComponent={listFooter}
         renderItem={renderProduct}
       />
-
-      <Pressable
-        style={styles.fab}
-        onPress={() => router.push("/malyan-ai")}
-      >
-        <Ionicons name="sparkles" size={22} color={colors.bg} />
-      </Pressable>
     </SafeAreaView>
   );
 }
@@ -402,6 +532,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
+  topBarSide: { flex: 1, alignItems: "flex-start" },
+  topBarSideEnd: { alignItems: "flex-end" },
+  topBarCenter: { flex: 1, alignItems: "center" },
   iconBtn: {
     width: 44,
     height: 44,
@@ -413,23 +546,31 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     ...shadows.soft,
   },
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.goldMuted,
-    borderWidth: 2,
-    borderColor: colors.gold,
+  cartBadge: {
+    position: "absolute",
+    top: -4,
+    left: -4,
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: colors.gold,
     alignItems: "center",
     justifyContent: "center",
+    paddingHorizontal: 5,
+    borderWidth: 2,
+    borderColor: colors.bg,
   },
-  heroWrap: { marginBottom: spacing.md, paddingHorizontal: spacing.md },
+  cartBadgeText: {
+    color: colors.bg,
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  heroWrap: { marginBottom: spacing.md },
   heroSlide: {
     height: BANNER_H,
-    borderRadius: 16,
-    overflow: "hidden",
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
     justifyContent: "center",
   },
   heroTitle: {
@@ -437,6 +578,7 @@ const styles = StyleSheet.create({
     fontSize: 26,
     fontWeight: "800",
     textAlign: "right",
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
   },
   heroSub: {
     color: "rgba(255,255,255,0.85)",
@@ -444,6 +586,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: "right",
     lineHeight: 22,
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
   },
   heroDiscount: {
     color: colors.gold,
@@ -458,11 +601,25 @@ const styles = StyleSheet.create({
     textAlign: "right",
     marginTop: 4,
   },
+  heroCta: {
+    marginTop: 12,
+    alignSelf: "flex-start",
+    backgroundColor: colors.white,
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+    borderRadius: 20,
+  },
+  heroCtaText: {
+    color: colors.brand,
+    fontWeight: "800",
+    fontSize: 15,
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
+  },
   dots: {
     flexDirection: "row",
     justifyContent: "center",
     gap: 8,
-    marginTop: -spacing.md,
+    marginTop: spacing.sm,
     marginBottom: spacing.sm,
   },
   dot: {
@@ -472,6 +629,27 @@ const styles = StyleSheet.create({
     backgroundColor: colors.border,
   },
   dotActive: { backgroundColor: colors.gold, width: 22 },
+  statsScroll: {
+    paddingHorizontal: spacing.md,
+    gap: 10,
+    paddingBottom: spacing.md,
+    flexDirection: "row",
+  },
+  statPill: {
+    backgroundColor: colors.surface,
+    borderRadius: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: BRAND_BORDER_44,
+  },
+  statPillText: {
+    color: colors.white,
+    fontWeight: "700",
+    fontSize: 13,
+    textAlign: "right",
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
+  },
   searchRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -516,6 +694,7 @@ const styles = StyleSheet.create({
     textAlign: "right",
     paddingHorizontal: spacing.md,
     marginBottom: 12,
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
   },
   sectionHead: {
     flexDirection: "row",
@@ -531,15 +710,14 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.md,
     flexDirection: "row",
   },
-  catChip: {
-    backgroundColor: colors.surface,
+  catCard: {
     borderRadius: radii.lg,
-    paddingVertical: 14,
+    paddingVertical: 16,
     paddingHorizontal: 16,
     borderWidth: 1,
-    borderColor: colors.border,
-    minWidth: 140,
-    ...shadows.card,
+    borderColor: colors.borderBrandMuted,
+    minWidth: 100,
+    ...shadows.soft,
   },
   catEmoji: { fontSize: 22, textAlign: "right", marginBottom: 6 },
   catLabel: {
@@ -548,6 +726,39 @@ const styles = StyleSheet.create({
     fontSize: 13,
     textAlign: "right",
     lineHeight: 20,
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
+  },
+  aiBanner: {
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.md,
+    borderRadius: radii.xl,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: colors.goldMuted,
+    ...shadows.card,
+  },
+  aiBannerGrad: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.md,
+    gap: 12,
+  },
+  aiBannerTextWrap: { flex: 1 },
+  aiBannerTitle: {
+    color: colors.white,
+    fontSize: 18,
+    fontWeight: "800",
+    textAlign: "right",
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
+  },
+  aiBannerSub: {
+    color: "rgba(255,255,255,0.85)",
+    fontSize: 13,
+    textAlign: "right",
+    marginTop: 6,
+    lineHeight: 20,
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
   },
   gridRow: {
     justifyContent: "space-between",
@@ -555,7 +766,7 @@ const styles = StyleSheet.create({
     marginBottom: GRID_GAP,
     gap: GRID_GAP,
   },
-  gridListContent: { paddingBottom: 100 },
+  gridListContent: { paddingBottom: 120 },
   gridCell: {},
   pCard: {
     width: "100%",
@@ -565,7 +776,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     borderWidth: 1,
     borderColor: colors.border,
-    ...shadows.card,
+    ...shadows.soft,
   },
   pCardPress: { flex: 1 },
   pImageWrap: {
@@ -592,6 +803,7 @@ const styles = StyleSheet.create({
     textAlign: "right",
     lineHeight: 20,
     minHeight: 40,
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
   },
   pPrice: {
     color: colors.gold,
@@ -602,7 +814,7 @@ const styles = StyleSheet.create({
   },
   addMini: {
     marginHorizontal: 12,
-    marginBottom: 12,
+    marginBottom: 8,
     marginTop: 6,
     flexDirection: "row",
     alignItems: "center",
@@ -655,18 +867,37 @@ const styles = StyleSheet.create({
     paddingVertical: 40,
     paddingHorizontal: spacing.md,
   },
-  fab: {
-    position: "absolute",
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    right: spacing.lg,
-    bottom: Platform.OS === "ios" ? 120 : 92,
-    backgroundColor: colors.brand,
-    borderWidth: 1,
-    borderColor: colors.goldMuted,
-    alignItems: "center",
+  footer: {
+    backgroundColor: colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    padding: spacing.lg,
+    marginTop: spacing.xl,
+  },
+  footerLine1: {
+    color: colors.white,
+    fontSize: 16,
+    fontWeight: "800",
+    textAlign: "center",
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
+  },
+  footerLine2: {
+    color: colors.textMuted,
+    textAlign: "center",
+    marginTop: 4,
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
+  },
+  socialRow: {
+    flexDirection: "row",
     justifyContent: "center",
-    ...shadows.goldGlow,
+    gap: 20,
+    marginTop: 16,
+  },
+  footerCopy: {
+    color: colors.textMuted,
+    fontSize: 12,
+    textAlign: "center",
+    marginTop: 16,
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
   },
 });

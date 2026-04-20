@@ -3,6 +3,8 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import { I18nManager, Platform } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { useAuthStore } from "../lib/authStore";
+import { supabase } from "../lib/supabase";
 import { colors } from "../lib/theme";
 
 /** Auth routing runs on `app/index.tsx` only — nothing here blocks the navigator. */
@@ -13,6 +15,24 @@ export default function RootLayout() {
     if (Platform.OS !== "web" && !I18nManager.isRTL) {
       I18nManager.forceRTL(true);
     }
+  }, []);
+
+  useEffect(() => {
+    void supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        useAuthStore.getState().setSession(session);
+      }
+    });
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_OUT") {
+        useAuthStore.setState({ session: null });
+      } else if (event === "SIGNED_IN" && session) {
+        useAuthStore.getState().setSession(session);
+      }
+    });
+    return () => subscription.unsubscribe();
   }, []);
 
   return (

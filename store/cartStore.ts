@@ -16,10 +16,13 @@ export type CartLine = {
 
 type CartState = {
   items: CartLine[];
+  /** Total units across all lines (derive in UI with `items` for reactive updates). */
+  cartCount: () => number;
   addItem: (line: Omit<CartLine, "quantity"> & { quantity?: number }) => void;
   removeItem: (productId: string) => void;
   setQuantity: (productId: string, quantity: number) => void;
   clear: () => void;
+  clearCart: () => void;
 };
 
 function clampQty(line: CartLine, qty: number): number {
@@ -34,6 +37,7 @@ export const useCartStore = create<CartState>()(
   persist(
     (set, get) => ({
       items: [],
+      cartCount: () => get().items.reduce((sum, i) => sum + i.quantity, 0),
       addItem: (line) => {
         const qty = line.quantity ?? 1;
         const existing = get().items.find((i) => i.productId === line.productId);
@@ -104,6 +108,7 @@ export const useCartStore = create<CartState>()(
         });
       },
       clear: () => set({ items: [] }),
+      clearCart: () => set({ items: [] }),
     }),
     {
       name: "malyan-cart",

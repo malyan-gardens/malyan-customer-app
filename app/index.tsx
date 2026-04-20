@@ -3,6 +3,7 @@ import { useRouter } from "expo-router";
 import { useEffect, useRef } from "react";
 import { Animated, StyleSheet, Text, View } from "react-native";
 import { MalyanLogo } from "../components/MalyanLogo";
+import { useAuthStore } from "../lib/authStore";
 import { supabase } from "../lib/supabase";
 import { colors } from "../lib/theme";
 
@@ -34,9 +35,11 @@ export default function SplashScreen() {
       const { data } = await supabase.auth.getSession();
       if (cancelled) return;
       if (data.session) {
+        useAuthStore.getState().setSession(data.session);
         router.replace("/(tabs)/home" as never);
       } else {
-        router.replace("/login" as never);
+        useAuthStore.getState().setState({ session: null, isGuest: true });
+        router.replace("/(tabs)/home" as never);
       }
     };
 

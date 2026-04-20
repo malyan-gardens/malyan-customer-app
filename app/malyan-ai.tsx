@@ -18,8 +18,10 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { colors, radii, shadows, spacing } from "../lib/theme";
+import { GuestModal } from "../components/GuestModal";
 import { MalyanLogo } from "../components/MalyanLogo";
+import { useAuthStore } from "../lib/authStore";
+import { colors, radii, shadows, spacing } from "../lib/theme";
 import { useCartStore } from "../store/cartStore";
 import { supabase } from "../lib/supabase";
 import {
@@ -196,10 +198,9 @@ function RecommendationRow({
 
 export default function MalyanAiScreen() {
   const router = useRouter();
+  const session = useAuthStore((s) => s.session);
+  const isGuest = useAuthStore((s) => s.isGuest);
   const addItem = useCartStore((s) => s.addItem);
-
-  const [checkingSession, setCheckingSession] = useState(true);
-  const [sessionOk, setSessionOk] = useState(false);
 
   const [pref, setPref] = useState<Pref>("mixed");
   const [messages, setMessages] = useState<ChatUiMessage[]>([]);
@@ -217,29 +218,6 @@ export default function MalyanAiScreen() {
     if (usage.remaining_messages <= 0) return "تبقى لك 0 رسالة اليوم";
     return `تبقى لك ${usage.remaining_messages} رسالة اليوم`;
   }, [usage]);
-
-  useEffect(() => {
-    let mounted = true;
-    const run = async () => {
-      try {
-        const { data } = await supabase.auth.getSession();
-        if (!mounted) return;
-        const ok = Boolean(data.session);
-        setSessionOk(ok);
-        setCheckingSession(false);
-        if (!ok) router.replace("/login");
-      } catch (e) {
-        if (!mounted) return;
-        setSessionOk(false);
-        setCheckingSession(false);
-        router.replace("/login");
-      }
-    };
-    void run();
-    return () => {
-      mounted = false;
-    };
-  }, [router]);
 
   useEffect(() => {
     let mounted = true;
@@ -300,6 +278,12 @@ export default function MalyanAiScreen() {
   }
 
   async function handleAddToCart(productId: string, params: { name: string; price: number; currency: string; imageUrl?: string | null; maxQuantity?: number | null }) {
+    if (isGuest || !session) {
+      Alert.alert("سجل دخولك أولاً", "", [
+        { text: "حسناً", onPress: () => router.push("/login") },
+      ]);
+      return;
+    }
     addItem({
       productId,
       name: params.name,
@@ -431,12 +415,20 @@ export default function MalyanAiScreen() {
       <>
         <Stack.Screen options={{ title: "مليان الذكي" }} />
         <SafeAreaView style={styles.screen} edges={["bottom"]}>
-          {checkingSession ? (
-            <View style={styles.centered}>
-              <ActivityIndicator size="large" color={colors.gold} />
-              <Text style={styles.centeredText}>جاري التحقق من الجلسة…</Text>
+          {isGuest || !session ? (
+            <View style={styles.guestGate}>
+              <View style={styles.guestTop}>
+                <Pressable onPress={() => router.back()} style={styles.backBtn}>
+                  <Ionicons name="chevron-back" size={18} color={colors.white} />
+                </Pressable>
+              </View>
+              <GuestModal
+                visible
+                onClose={() => router.back()}
+                onLogin={() => router.push("/login")}
+              />
             </View>
-          ) : sessionOk ? (
+          ) : (
             <>
               <View style={styles.header}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
@@ -605,7 +597,7 @@ export default function MalyanAiScreen() {
                 <View style={{ height: 10 }} />
               </KeyboardAvoidingView>
             </>
-          ) : null}
+          )}
         </SafeAreaView>
       </>
     </AiErrorBoundary>
@@ -614,6 +606,12 @@ export default function MalyanAiScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
+  guestGate: { flex: 1 },
+  guestTop: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
+  },
   centered: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
   centeredText: { color: colors.textSecondary, fontWeight: "800", textAlign: "center" },
   header: {

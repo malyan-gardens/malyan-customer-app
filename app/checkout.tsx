@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Platform,
@@ -12,12 +12,18 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useAuthStore } from "../lib/authStore";
 import { cartTotal, useCartStore, type CartLine } from "../store/cartStore";
 import { useCheckoutDraftStore } from "../store/checkoutDraftStore";
 import { colors, radii, shadows, spacing } from "../lib/theme";
 
 export default function CheckoutScreen() {
   const router = useRouter();
+  const session = useAuthStore((s) => s.session);
+
+  useEffect(() => {
+    if (!session) router.replace("/login" as never);
+  }, [session, router]);
   const params = useLocalSearchParams<{
     productId?: string;
     productName?: string;
@@ -74,6 +80,17 @@ export default function CheckoutScreen() {
     setSubmitting(false);
     router.push("/order-location" as never);
   };
+
+  if (!session) {
+    return (
+      <>
+        <Stack.Screen options={{ title: "إتمام الطلب" }} />
+        <View style={{ flex: 1, backgroundColor: colors.bg }}>
+          <ActivityIndicator color={colors.gold} />
+        </View>
+      </>
+    );
+  }
 
   if (orderItems.length === 0) {
     return (

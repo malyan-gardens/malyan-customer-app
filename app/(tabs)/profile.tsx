@@ -14,16 +14,19 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MalyanLogo } from "../../components/MalyanLogo";
+import { useAuthStore } from "../../lib/authStore";
 import { CONTACT } from "../../lib/contact";
 import { supabase } from "../../lib/supabase";
 import { colors, radii, shadows, spacing } from "../../lib/theme";
 
 export default function ProfileScreen() {
+  const session = useAuthStore((s) => s.session);
   const [displayName, setDisplayName] = useState("مستخدم مليان");
   const [email, setEmail] = useState<string>(CONTACT.email);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!session) return;
     let mounted = true;
     const loadUser = async () => {
       const { data } = await supabase.auth.getUser();
@@ -49,11 +52,28 @@ export default function ProfileScreen() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [session]);
 
   async function handleLogout() {
     await supabase.auth.signOut();
     router.replace("/login");
+  }
+
+  if (!session) {
+    return (
+      <SafeAreaView style={styles.screen} edges={["top", "bottom"]}>
+        <View style={styles.guestWrap}>
+          <Ionicons name="person-circle-outline" size={80} color={colors.textMuted} />
+          <Text style={styles.guestTitle}>سجل دخولك لعرض ملفك الشخصي</Text>
+          <Pressable
+            onPress={() => router.push("/login")}
+            style={({ pressed }) => [styles.guestLoginBtn, pressed && { opacity: 0.92 }]}
+          >
+            <Text style={styles.guestLoginText}>تسجيل الدخول</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
   }
 
   return (
@@ -369,6 +389,36 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 8,
     textAlign: "center",
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
+  },
+  guestWrap: {
+    flex: 1,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xl,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.lg,
+  },
+  guestTitle: {
+    color: colors.white,
+    fontSize: 18,
+    fontWeight: "800",
+    textAlign: "center",
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
+  },
+  guestLoginBtn: {
+    marginTop: spacing.lg,
+    backgroundColor: colors.brand,
+    paddingVertical: 16,
+    paddingHorizontal: 40,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.goldMuted,
+  },
+  guestLoginText: {
+    color: colors.white,
+    fontWeight: "800",
+    fontSize: 16,
     fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
   },
 });

@@ -1,24 +1,52 @@
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useState } from "react";
+import {
+  Image,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { Swipeable } from "react-native-gesture-handler";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { colors, radii, shadows, spacing } from "../../lib/theme";
+import { GuestModal } from "../../components/GuestModal";
+import { useAuthStore } from "../../lib/authStore";
+import { colors, radii, spacing } from "../../lib/theme";
 import { cartTotal, useCartStore, type CartLine } from "../../store/cartStore";
 
 export default function CartScreen() {
   const router = useRouter();
+  const session = useAuthStore((s) => s.session);
   const items = useCartStore((s) => s.items);
   const setQuantity = useCartStore((s) => s.setQuantity);
   const removeItem = useCartStore((s) => s.removeItem);
-  const clear = useCartStore((s) => s.clear);
   const total = cartTotal(items);
+  const [guestOpen, setGuestOpen] = useState(false);
+
+  const onCheckout = () => {
+    if (!session) {
+      setGuestOpen(true);
+      return;
+    }
+    router.push("/checkout");
+  };
 
   return (
     <SafeAreaView style={styles.screen} edges={["top", "bottom"]}>
+      <GuestModal
+        visible={guestOpen}
+        onClose={() => setGuestOpen(false)}
+        onLogin={() => {
+          setGuestOpen(false);
+          router.push("/login");
+        }}
+      />
+
       <View style={styles.header}>
         <Text style={styles.headerTitle}>سلة التسوق</Text>
-        <Text style={styles.headerSub}>مراجعة طلبك قبل الإرسال</Text>
       </View>
 
       <ScrollView
@@ -28,30 +56,26 @@ export default function CartScreen() {
       >
         {items.length === 0 ? (
           <View style={styles.emptyWrap}>
-            <LinearGradient
-              colors={[colors.surface, colors.bgElevated]}
-              style={styles.emptyIcon}
-            >
-              <Ionicons name="cart-outline" size={56} color={colors.gold} />
-            </LinearGradient>
-            <Text style={styles.emptyTitle}>السلة فارغة</Text>
-            <Text style={styles.emptySub}>
-              اكتشف تشكيلة المنتجات الفاخرة
-            </Text>
-            <Pressable
-              onPress={() => router.push("/(tabs)/home")}
-              style={styles.exploreBtn}
-            >
+            <Ionicons name="cart-outline" size={80} color={colors.textMuted} />
+            <Text style={styles.emptyTitle}>سلتك فارغة</Text>
+            <Text style={styles.emptySub}>أضف منتجات لتبدأ التسوق</Text>
+            <Pressable onPress={() => router.push("/plants")} style={styles.exploreBtn}>
               <Text style={styles.exploreBtnText}>تصفح المنتجات</Text>
             </Pressable>
           </View>
         ) : (
           items.map((line) => (
-            <CartLineRow
+            <SwipeableCartRow
               key={line.productId}
               line={line}
               onInc={() => setQuantity(line.productId, line.quantity + 1)}
-              onDec={() => setQuantity(line.productId, line.quantity - 1)}
+              onDec={() => {
+                if (line.quantity <= 1) {
+                  removeItem(line.productId);
+                } else {
+                  setQuantity(line.productId, line.quantity - 1);
+                }
+              }}
               onRemove={() => removeItem(line.productId)}
             />
           ))
@@ -60,32 +84,22 @@ export default function CartScreen() {
 
       {items.length > 0 && (
         <View style={styles.footer}>
-          <LinearGradient
-            colors={[colors.bgElevated, colors.bg]}
-            style={styles.footerGrad}
-          >
-            <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>الإجمالي</Text>
-              <Text style={styles.totalValue}>{total.toFixed(2)} QAR</Text>
-            </View>
-            <Pressable
-              style={styles.checkoutBtn}
-              onPress={() => router.push("/checkout")}
-            >
-              <Text style={styles.checkoutText}>إتمام الطلب</Text>
-              <Ionicons name="arrow-back" size={20} color={colors.bg} />
-            </Pressable>
-            <Pressable onPress={clear} style={styles.clearBtn}>
-              <Text style={styles.clearText}>مسح السلة</Text>
-            </Pressable>
-          </LinearGradient>
+          <Text style={styles.totalLine}>
+            الإجمالي:{" "}
+            <Text style={styles.totalGold}>
+              {total.toFixed(2)} QAR
+            </Text>
+          </Text>
+          <Pressable style={styles.checkoutBtn} onPress={onCheckout}>
+            <Text style={styles.checkoutText}>إتمام الطلب</Text>
+          </Pressable>
         </View>
       )}
     </SafeAreaView>
   );
 }
 
-function CartLineRow({
+function SwipeableCartRow({
   line,
   onInc,
   onDec,
@@ -97,57 +111,65 @@ function CartLineRow({
   onRemove: () => void;
 }) {
   const title = line.nameAr ?? line.name;
+  const lineTotal = line.price * line.quantity;
   const atMax =
     line.maxQuantity != null &&
     line.maxQuantity >= 0 &&
     line.quantity >= line.maxQuantity;
 
+  const renderLeftActions = () => (
+    <Pressable style={styles.swipeDelete} onPress={onRemove}>
+      <Ionicons name="trash-outline" size={26} color={colors.white} />
+    </Pressable>
+  );
+
   return (
-    <View style={styles.lineRow}>
-      <View style={styles.thumb}>
-        {line.imageUrl ? (
-          <Image
-            source={{ uri: line.imageUrl }}
-            style={styles.thumbImage}
-            resizeMode="cover"
-          />
-        ) : (
-          <View style={styles.thumbPlaceholder}>
-            <Ionicons name="leaf" size={28} color={colors.brand} />
-          </View>
-        )}
-      </View>
-      <View style={styles.lineBody}>
-        <Text style={styles.lineTitle} numberOfLines={2}>
-          {title}
-        </Text>
-        <Text style={styles.linePrice}>
-          {(line.price * line.quantity).toFixed(2)} {line.currency}
-        </Text>
-        {line.maxQuantity != null && line.maxQuantity >= 0 ? (
-          <Text style={styles.maxHint}>
-            حد المخزون: {line.maxQuantity}
-            {atMax ? " — الحد الأقصى" : ""}
-          </Text>
-        ) : null}
-        <View style={styles.qtyRow}>
-          <Pressable onPress={onDec} style={styles.qtyBtn}>
-            <Ionicons name="remove" size={18} color="#fff" />
-          </Pressable>
-          <Text style={styles.qtyText}>{line.quantity}</Text>
-          <Pressable
-            onPress={onInc}
-            style={[styles.qtyBtn, styles.qtyBtnBrand, atMax && styles.qtyBtnDisabled]}
-            disabled={atMax}
-          >
-            <Ionicons name="add" size={18} color="#fff" />
-          </Pressable>
-          <Pressable onPress={onRemove} style={styles.trashBtn}>
-            <Ionicons name="trash-outline" size={20} color={colors.red400} />
-          </Pressable>
+    <Swipeable renderLeftActions={renderLeftActions} overshootLeft={false}>
+      <View style={styles.lineRow}>
+        <View style={styles.thumb}>
+          {line.imageUrl ? (
+            <Image
+              source={{ uri: line.imageUrl }}
+              style={styles.thumbImage}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={styles.thumbPlaceholder}>
+              <Ionicons name="leaf" size={24} color={colors.brand} />
+            </View>
+          )}
         </View>
+        <View style={styles.lineBody}>
+          <Text style={styles.lineTitle} numberOfLines={2}>
+            {title}
+          </Text>
+          <Text style={styles.unitPrice}>
+            {line.price.toFixed(2)} {line.currency}
+          </Text>
+          <View style={styles.midRow}>
+            <View style={styles.qtyRow}>
+              <Pressable onPress={onDec} style={styles.qtyBtn}>
+                <Ionicons name="remove" size={18} color="#fff" />
+              </Pressable>
+              <Text style={styles.qtyText}>{line.quantity}</Text>
+              <Pressable
+                onPress={onInc}
+                style={[styles.qtyBtn, styles.qtyBtnBrand, atMax && styles.qtyBtnDisabled]}
+                disabled={atMax}
+              >
+                <Ionicons name="add" size={18} color="#fff" />
+              </Pressable>
+            </View>
+            <Text style={styles.lineTotal}>
+              {lineTotal.toFixed(2)} {line.currency}
+            </Text>
+          </View>
+        </View>
+        <Pressable onPress={onRemove} style={styles.deleteBtn}>
+          <Ionicons name="trash-outline" size={22} color={colors.red400} />
+        </Pressable>
       </View>
-    </View>
+    </Swipeable>
   );
 }
 
@@ -161,71 +183,71 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     color: colors.white,
-    fontSize: 26,
+    fontSize: 22,
     fontWeight: "800",
     textAlign: "right",
-  },
-  headerSub: {
-    color: colors.textMuted,
-    textAlign: "right",
-    marginTop: 6,
-    fontSize: 14,
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
   },
   scroll: { flex: 1 },
-  scrollContent: { padding: spacing.md, paddingBottom: 200 },
+  scrollContent: { padding: spacing.md, paddingBottom: 160 },
   emptyWrap: {
     alignItems: "center",
-    paddingVertical: 64,
+    paddingVertical: 56,
     paddingHorizontal: 24,
-  },
-  emptyIcon: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   emptyTitle: {
     color: colors.white,
-    marginTop: 24,
+    marginTop: 20,
     fontSize: 20,
     fontWeight: "800",
     textAlign: "center",
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
   },
   emptySub: {
     color: colors.textMuted,
     marginTop: 8,
     textAlign: "center",
     lineHeight: 22,
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
   },
   exploreBtn: {
-    marginTop: 28,
-    backgroundColor: colors.gold,
-    paddingHorizontal: 32,
+    marginTop: 24,
+    backgroundColor: colors.brand,
+    paddingHorizontal: 28,
     paddingVertical: 14,
     borderRadius: radii.lg,
-    ...shadows.goldGlow,
   },
   exploreBtnText: {
-    color: colors.bg,
+    color: colors.white,
     fontWeight: "800",
     fontSize: 16,
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
+  },
+  swipeDelete: {
+    backgroundColor: colors.red500,
+    justifyContent: "center",
+    alignItems: "center",
+    width: 72,
+    marginBottom: 10,
+    borderTopLeftRadius: radii.md,
+    borderBottomLeftRadius: radii.md,
   },
   lineRow: {
     flexDirection: "row",
+    alignItems: "center",
     backgroundColor: colors.surface,
-    borderRadius: radii.lg,
+    borderRadius: radii.md,
     borderWidth: 1,
     borderColor: colors.border,
-    marginBottom: 12,
-    overflow: "hidden",
-    ...shadows.soft,
+    marginBottom: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
   },
   thumb: {
-    width: 108,
-    height: 108,
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+    overflow: "hidden",
     backgroundColor: colors.bgElevated,
   },
   thumbImage: { width: "100%", height: "100%" },
@@ -234,39 +256,34 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  lineBody: {
-    flex: 1,
-    padding: 12,
-    justifyContent: "space-between",
-  },
+  lineBody: { flex: 1, marginHorizontal: 10 },
   lineTitle: {
     color: colors.white,
     fontWeight: "700",
     textAlign: "right",
-    fontSize: 15,
+    fontSize: 14,
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
   },
-  linePrice: {
-    color: colors.gold,
-    textAlign: "right",
-    fontWeight: "800",
-    marginTop: 4,
-  },
-  maxHint: {
+  unitPrice: {
     color: colors.textMuted,
-    fontSize: 11,
     textAlign: "right",
+    fontSize: 12,
     marginTop: 4,
+  },
+  midRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 8,
   },
   qtyRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "flex-end",
-    marginTop: 10,
     gap: 8,
   },
   qtyBtn: {
-    width: 38,
-    height: 38,
+    width: 34,
+    height: 34,
     borderRadius: radii.sm,
     backgroundColor: colors.neutral800,
     alignItems: "center",
@@ -279,10 +296,16 @@ const styles = StyleSheet.create({
   qtyText: {
     color: colors.white,
     fontWeight: "800",
-    minWidth: 28,
+    minWidth: 24,
     textAlign: "center",
   },
-  trashBtn: { marginRight: 4, padding: 8 },
+  lineTotal: {
+    color: colors.gold,
+    fontWeight: "800",
+    fontSize: 15,
+    textAlign: "right",
+  },
+  deleteBtn: { padding: 8 },
   footer: {
     position: "absolute",
     bottom: 0,
@@ -290,37 +313,36 @@ const styles = StyleSheet.create({
     right: 0,
     borderTopWidth: 1,
     borderTopColor: colors.border,
-  },
-  footerGrad: {
+    backgroundColor: colors.bgElevated,
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
     paddingBottom: spacing.lg,
   },
-  totalRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 16,
+  totalLine: {
+    color: colors.white,
+    fontSize: 16,
+    fontWeight: "700",
+    textAlign: "right",
+    marginBottom: 12,
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
   },
-  totalLabel: { color: colors.textSecondary, fontSize: 16 },
-  totalValue: { color: colors.white, fontSize: 22, fontWeight: "800" },
+  totalGold: {
+    color: colors.gold,
+    fontWeight: "800",
+    fontSize: 18,
+  },
   checkoutBtn: {
-    backgroundColor: colors.gold,
+    backgroundColor: colors.brand,
     paddingVertical: 16,
     borderRadius: radii.lg,
-    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    ...shadows.goldGlow,
+    borderWidth: 1,
+    borderColor: colors.brandDark,
   },
-  checkoutText: { color: colors.bg, fontWeight: "800", fontSize: 18 },
-  checkoutHint: {
-    color: colors.textMuted,
-    fontSize: 11,
-    textAlign: "center",
-    marginTop: 10,
+  checkoutText: {
+    color: colors.white,
+    fontWeight: "800",
+    fontSize: 18,
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
   },
-  clearBtn: { marginTop: 12, paddingVertical: 8, alignItems: "center" },
-  clearText: { color: colors.textMuted, fontSize: 14 },
 });

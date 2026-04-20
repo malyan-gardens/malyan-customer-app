@@ -4,27 +4,56 @@ import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
+  Dimensions,
+  FlatList,
   Image,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { GuestModal } from "../../components/GuestModal";
+import { useAuthStore } from "../../lib/authStore";
+import { supabase } from "../../lib/supabase";
 import { colors, radii, shadows, spacing } from "../../lib/theme";
 import type { InventoryRow } from "../../lib/types";
-import { supabase } from "../../lib/supabase";
 import { useCartStore } from "../../store/cartStore";
+
+const IMAGE_H = 280;
+const { width: SCREEN_W } = Dimensions.get("window");
+const RELATED_SIZE = 120;
 
 export default function ProductDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const session = useAuthStore((s) => s.session);
+  const isGuest = useAuthStore((s) => s.isGuest);
   const addItem = useCartStore((s) => s.addItem);
 
   const [product, setProduct] = useState<InventoryRow | null>(null);
+  const [related, setRelated] = useState<InventoryRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [qty, setQty] = useState(1);
+  const [guestModalOpen, setGuestModalOpen] = useState(false);
+
+  const loadRelated = useCallback(async (row: InventoryRow, productId: string) => {
+    if (!row.category) {
+      setRelated([]);
+      return;
+    }
+    const { data } = await supabase
+      .from("inventory")
+      .select("*")
+      .eq("category", row.category)
+      .neq("id", productId)
+      .limit(6);
+    setRelated((data as InventoryRow[]) ?? []);
+  }, []);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -38,12 +67,15 @@ export default function ProductDetailScreen() {
     if (qErr) {
       setError(qErr.message);
       setProduct(null);
+      setRelated([]);
     } else {
-      setProduct(data as InventoryRow);
+      const row = data as InventoryRow;
+      setProduct(row);
       setQty(1);
+      void loadRelated(row, String(id));
     }
     setLoading(false);
-  }, [id]);
+  }, [id, loadRelated]);
 
   useEffect(() => {
     load();
@@ -60,19 +92,15 @@ export default function ProductDetailScreen() {
     ? `${(product.selling_price ?? 0).toFixed(2)} ${product.currency ?? "QAR"}`
     : "";
 
-  const heightLabel = useMemo(() => {
-    if (!product) return null;
-    const h = product.height_cm;
-    if (h === null || h === undefined || h === "") return null;
-    return typeof h === "number" ? `${h} سم` : String(h);
-  }, [product]);
-
   const decQty = () => setQty((q) => Math.max(1, q - 1));
-  const incQty = () =>
-    setQty((q) => Math.min(maxAllowed, q + 1));
+  const incQty = () => setQty((q) => Math.min(maxAllowed, q + 1));
 
   const handleAddToCart = () => {
     if (!product) return;
+    if (isGuest || !session) {
+      setGuestModalOpen(true);
+      return;
+    }
     addItem({
       productId: product.id,
       name: product.name_ar ?? "",
@@ -81,20 +109,24 @@ export default function ProductDetailScreen() {
       currency: product.currency ?? "QAR",
       imageUrl: product.image_url,
       quantity: qty,
-      maxQuantity:
-        maxStock != null && maxStock >= 0 ? maxStock : undefined,
+      maxQuantity: maxStock != null && maxStock >= 0 ? maxStock : undefined,
     });
-    router.push("/(tabs)/cart");
+    Alert.alert("تمت الإضافة للسلة ✓");
   };
 
-  const openAi = () => {
-    if (!id) return;
+  const handleOrderNow = () => {
+    if (!product) return;
+    if (isGuest || !session) {
+      setGuestModalOpen(true);
+      return;
+    }
     router.push({
-      pathname: "/(tabs)/assistant",
+      pathname: "/checkout",
       params: {
-        from: "product",
-        productId: String(id),
+        productId: product.id,
         productName: title,
+        productPrice: String(product.selling_price ?? 0),
+        productCurrency: product.currency ?? "QAR",
       },
     });
   };
@@ -128,46 +160,44 @@ export default function ProductDetailScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: title.slice(0, 36) }} />
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.hero}>
-          {product.image_url ? (
-            <Image
-              source={{ uri: product.image_url }}
-              style={styles.heroImage}
-              resizeMode="cover"
-            />
-          ) : (
-            <LinearGradient
-              colors={[colors.surface, colors.bgElevated]}
-              style={styles.heroPlaceholder}
-            >
-              <Ionicons name="leaf-outline" size={80} color={colors.brand} />
-            </LinearGradient>
-          )}
-        </View>
-
-        <View style={styles.body}>
-          <Text style={styles.name}>{title}</Text>
-          {product.category ? (
-            <View style={styles.catPill}>
-              <Text style={styles.category}>{product.category}</Text>
-            </View>
-          ) : null}
-
-          <View style={styles.priceRow}>
-            <Text style={styles.price}>{priceLabel}</Text>
-            {heightLabel ? (
-              <View style={styles.heightBadge}>
-                <Ionicons name="resize-outline" size={16} color={colors.gold} />
-                <Text style={styles.heightText}>{heightLabel}</Text>
-              </View>
-            ) : null}
+      <Stack.Screen options={{ headerShown: false }} />
+      <GuestModal
+        visible={guestModalOpen}
+        onClose={() => setGuestModalOpen(false)}
+        onLogin={() => {
+          setGuestModalOpen(false);
+          router.push("/login");
+        }}
+      />
+      <SafeAreaView style={styles.safeTop} edges={["top"]}>
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          nestedScrollEnabled
+        >
+          <View style={styles.heroWrap}>
+            {product.image_url ? (
+              <Image
+                source={{ uri: product.image_url }}
+                style={styles.heroImage}
+                resizeMode="cover"
+              />
+            ) : (
+              <LinearGradient
+                colors={[colors.surface, colors.bgElevated]}
+                style={[styles.heroImage, styles.heroPlaceholder]}
+              >
+                <Ionicons name="leaf-outline" size={80} color={colors.brand} />
+              </LinearGradient>
+            )}
+            <Pressable style={styles.backOverlay} onPress={() => router.back()}>
+              <Ionicons name="arrow-back" size={24} color={colors.white} />
+            </Pressable>
           </View>
+
+          <Text style={styles.name}>{title}</Text>
+          <Text style={styles.price}>{priceLabel}</Text>
 
           {product.description ? (
             <Text style={styles.desc}>{product.description}</Text>
@@ -175,72 +205,89 @@ export default function ProductDetailScreen() {
             <Text style={styles.noDesc}>لا يوجد وصف إضافي لهذا المنتج.</Text>
           )}
 
-          {maxStock != null && maxStock >= 0 ? (
-            <Text style={styles.stock}>المتاح في المخزون: {maxStock}</Text>
-          ) : null}
+          <View style={styles.divider} />
 
-          <Text style={styles.qtyLabel}>الكمية</Text>
           <View style={styles.qtyRow}>
+            <Pressable
+              onPress={decQty}
+              style={({ pressed }) => [styles.qtyBtnSide, pressed && { opacity: 0.85 }]}
+            >
+              <Ionicons name="remove" size={22} color={colors.white} />
+            </Pressable>
+            <Text style={styles.qtyVal}>{qty}</Text>
             <Pressable
               onPress={incQty}
               style={({ pressed }) => [
-                styles.qtyBtn,
+                styles.qtyBtnSide,
                 styles.qtyBtnBrand,
                 pressed && { opacity: 0.85 },
               ]}
             >
               <Ionicons name="add" size={22} color="#fff" />
             </Pressable>
-            <Text style={styles.qtyVal}>{qty}</Text>
-            <Pressable
-              onPress={decQty}
-              style={({ pressed }) => [
-                styles.qtyBtn,
-                pressed && { opacity: 0.85 },
-              ]}
-            >
-              <Ionicons name="remove" size={22} color={colors.white} />
-            </Pressable>
           </View>
 
           <Pressable
             onPress={handleAddToCart}
-            style={({ pressed }) => [
-              styles.addBtn,
-              pressed && { opacity: 0.92 },
-            ]}
+            style={({ pressed }) => [styles.addBtn, pressed && { opacity: 0.92 }]}
           >
-            <LinearGradient
-              colors={[colors.brand, colors.brandDark]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.addBtnGrad}
-            >
-              <Ionicons name="cart" size={22} color="#fff" />
-              <Text style={styles.addBtnText}>أضف إلى السلة</Text>
-            </LinearGradient>
+            <Text style={styles.addBtnText}>أضف للسلة</Text>
           </Pressable>
 
           <Pressable
-            onPress={openAi}
-            style={({ pressed }) => [
-              styles.aiBtn,
-              pressed && { opacity: 0.92 },
-            ]}
+            onPress={handleOrderNow}
+            style={({ pressed }) => [styles.orderBtn, pressed && { opacity: 0.92 }]}
           >
-            <Text style={styles.aiBtnText}>🤖 اسألني عن هذا المنتج</Text>
+            <Text style={styles.orderBtnText}>اطلب الآن</Text>
           </Pressable>
 
-          <Pressable onPress={() => router.back()} style={styles.secondaryBtn}>
-            <Text style={styles.secondaryText}>متابعة التسوق</Text>
-          </Pressable>
-        </View>
-      </ScrollView>
+          {related.length > 0 ? (
+            <View style={styles.relatedSection}>
+              <Text style={styles.relatedTitle}>منتجات مشابهة</Text>
+              <FlatList
+                horizontal
+                data={related}
+                keyExtractor={(item) => item.id}
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.relatedList}
+                nestedScrollEnabled
+                renderItem={({ item: r }) => (
+                  <Pressable
+                    style={styles.relatedCard}
+                    onPress={() => router.push(`/product/${r.id}`)}
+                  >
+                    <View style={styles.relatedImgWrap}>
+                      {r.image_url ? (
+                        <Image
+                          source={{ uri: r.image_url }}
+                          style={styles.relatedImg}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <View style={styles.relatedPlaceholder}>
+                          <Ionicons name="leaf" size={36} color={colors.brand} />
+                        </View>
+                      )}
+                    </View>
+                    <Text style={styles.relatedName} numberOfLines={2}>
+                      {r.name_ar ?? ""}
+                    </Text>
+                    <Text style={styles.relatedPrice}>
+                      {(r.selling_price ?? 0).toFixed(2)} {r.currency ?? "QAR"}
+                    </Text>
+                  </Pressable>
+                )}
+              />
+            </View>
+          ) : null}
+        </ScrollView>
+      </SafeAreaView>
     </>
   );
 }
 
 const styles = StyleSheet.create({
+  safeTop: { flex: 1, backgroundColor: colors.bg },
   scroll: { flex: 1, backgroundColor: colors.bg },
   scrollContent: { paddingBottom: 40 },
   centered: {
@@ -275,109 +322,83 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
   },
   primaryBtnText: { color: colors.white, fontWeight: "700" },
-  hero: {
-    aspectRatio: 1,
+  heroWrap: {
+    width: SCREEN_W,
+    height: IMAGE_H,
     backgroundColor: colors.surface,
-    marginHorizontal: spacing.md,
-    marginTop: spacing.sm,
-    borderRadius: radii.xl,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: colors.border,
-    ...shadows.card,
+    position: "relative",
   },
-  heroImage: { width: "100%", height: "100%" },
+  heroImage: {
+    width: "100%",
+    height: IMAGE_H,
+  },
   heroPlaceholder: {
-    flex: 1,
     alignItems: "center",
     justifyContent: "center",
   },
-  body: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg },
-  name: {
-    color: colors.white,
-    fontSize: 26,
-    fontWeight: "800",
-    textAlign: "right",
-    lineHeight: 34,
-  },
-  catPill: {
-    alignSelf: "flex-end",
-    marginTop: 10,
-    backgroundColor: colors.goldMuted,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: radii.full,
-    borderWidth: 1,
-    borderColor: colors.gold,
-  },
-  category: {
-    color: colors.gold,
-    fontWeight: "700",
-    fontSize: 13,
-    textAlign: "right",
-  },
-  priceRow: {
-    flexDirection: "row",
+  backOverlay: {
+    position: "absolute",
+    top: 12,
+    left: 12,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.overlay,
     alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: spacing.md,
-    flexWrap: "wrap",
-    gap: 12,
-  },
-  price: {
-    color: colors.gold,
-    fontSize: 28,
-    fontWeight: "800",
-    textAlign: "right",
-  },
-  heightBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: colors.surface,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: radii.md,
+    justifyContent: "center",
     borderWidth: 1,
     borderColor: colors.border,
   },
-  heightText: { color: colors.textSecondary, fontWeight: "700" },
+  name: {
+    color: colors.white,
+    fontSize: 22,
+    fontWeight: "800",
+    textAlign: "right",
+    paddingHorizontal: spacing.md,
+    marginTop: spacing.md,
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
+  },
+  price: {
+    color: colors.gold,
+    fontSize: 20,
+    fontWeight: "800",
+    textAlign: "right",
+    paddingHorizontal: spacing.md,
+    marginTop: spacing.sm,
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
+  },
   desc: {
     color: colors.textSecondary,
-    marginTop: spacing.lg,
+    fontSize: 14,
+    lineHeight: 22,
     textAlign: "right",
-    fontSize: 16,
-    lineHeight: 28,
+    paddingHorizontal: spacing.md,
+    marginTop: spacing.sm,
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
   },
   noDesc: {
     color: colors.textMuted,
-    marginTop: spacing.lg,
-    textAlign: "right",
     fontSize: 14,
+    textAlign: "right",
+    paddingHorizontal: spacing.md,
+    marginTop: spacing.sm,
   },
-  stock: {
-    color: colors.textMuted,
+  divider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginHorizontal: spacing.md,
     marginTop: spacing.md,
-    textAlign: "right",
-    fontSize: 14,
-  },
-  qtyLabel: {
-    color: colors.white,
-    fontWeight: "700",
-    marginTop: spacing.lg,
-    textAlign: "right",
-    fontSize: 16,
   },
   qtyRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "flex-end",
-    gap: 16,
-    marginTop: 12,
+    justifyContent: "center",
+    marginTop: spacing.md,
+    gap: 24,
   },
-  qtyBtn: {
-    width: 48,
-    height: 48,
+  qtyBtnSide: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
     borderRadius: radii.md,
     backgroundColor: colors.surface,
     borderWidth: 1,
@@ -391,35 +412,91 @@ const styles = StyleSheet.create({
   },
   qtyVal: {
     color: colors.white,
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: "800",
-    minWidth: 36,
+    minWidth: 32,
     textAlign: "center",
   },
   addBtn: {
-    marginTop: spacing.xl,
+    marginHorizontal: spacing.md,
+    marginTop: spacing.md,
+    backgroundColor: colors.brand,
+    paddingVertical: 16,
     borderRadius: radii.lg,
-    overflow: "hidden",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: colors.brandDark,
     ...shadows.soft,
   },
-  addBtnGrad: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-    paddingVertical: 16,
+  addBtnText: {
+    color: colors.white,
+    fontWeight: "800",
+    fontSize: 18,
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
   },
-  addBtnText: { color: colors.white, fontWeight: "800", fontSize: 18 },
-  aiBtn: {
-    marginTop: spacing.md,
+  orderBtn: {
+    marginHorizontal: spacing.md,
+    marginTop: spacing.sm,
+    backgroundColor: colors.gold,
     paddingVertical: 16,
     borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: colors.gold,
-    backgroundColor: colors.goldMuted,
     alignItems: "center",
+    borderWidth: 1,
+    borderColor: colors.goldMuted,
+    ...shadows.goldGlow,
   },
-  aiBtnText: { color: colors.gold, fontWeight: "800", fontSize: 16 },
-  secondaryBtn: { marginTop: spacing.md, paddingVertical: 12, alignItems: "center" },
-  secondaryText: { color: colors.textMuted },
+  orderBtnText: {
+    color: colors.bg,
+    fontWeight: "800",
+    fontSize: 18,
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
+  },
+  relatedSection: { marginTop: spacing.xl },
+  relatedTitle: {
+    color: colors.white,
+    fontSize: 18,
+    fontWeight: "800",
+    textAlign: "right",
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
+  },
+  relatedList: {
+    paddingHorizontal: spacing.md,
+    gap: 12,
+    paddingBottom: spacing.md,
+  },
+  relatedCard: {
+    width: RELATED_SIZE + 16,
+    marginRight: 12,
+  },
+  relatedImgWrap: {
+    width: RELATED_SIZE,
+    height: RELATED_SIZE,
+    borderRadius: radii.md,
+    overflow: "hidden",
+    backgroundColor: colors.bgElevated,
+    alignSelf: "center",
+  },
+  relatedImg: { width: "100%", height: "100%" },
+  relatedPlaceholder: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  relatedName: {
+    color: colors.white,
+    fontWeight: "700",
+    fontSize: 13,
+    textAlign: "right",
+    marginTop: 8,
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
+  },
+  relatedPrice: {
+    color: colors.gold,
+    fontWeight: "800",
+    fontSize: 14,
+    textAlign: "right",
+    marginTop: 4,
+  },
 });

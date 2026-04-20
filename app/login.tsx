@@ -14,6 +14,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useAuthStore } from "../lib/authStore";
 import { supabase } from "../lib/supabase";
 import { colors, radii, shadows, spacing } from "../lib/theme";
 
@@ -121,6 +122,16 @@ export default function LoginScreen() {
               </Pressable>
               {error ? <Text style={styles.errorText}>{error}</Text> : null}
             </View>
+
+            <Pressable
+              onPress={() => {
+                useAuthStore.getState().setState({ session: null, isGuest: true });
+                router.replace("/(tabs)/home");
+              }}
+              style={({ pressed }) => [styles.guestBtn, pressed && { opacity: 0.9 }]}
+            >
+              <Text style={styles.guestBtnText}>تصفح كضيف</Text>
+            </Pressable>
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -190,6 +201,21 @@ const styles = StyleSheet.create({
     color: colors.red400,
     textAlign: "center",
     marginTop: 8,
+    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
+  },
+  guestBtn: {
+    marginTop: 8,
+    paddingVertical: 14,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.brand,
+    backgroundColor: "transparent",
+    alignItems: "center",
+  },
+  guestBtnText: {
+    color: colors.white,
+    fontWeight: "800",
+    fontSize: 16,
     fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
   },
 });
