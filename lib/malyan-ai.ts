@@ -68,11 +68,178 @@ export type InvokeAiResult = {
   usage: AiUsage | null;
 };
 
+type InventoryAiRow = {
+  name_ar: string | null;
+  selling_price: number | null;
+  currency: string | null;
+  quantity: number | null;
+  category: string | null;
+};
+
+type PromotionAiRow = {
+  title: string | null;
+  type: string | null;
+  discount_value: number | null;
+  applies_to: string | null;
+  target_category: string | null;
+};
+
+function promotionTypeLabelAr(type: string | null | undefined): string {
+  const t = String(type ?? "").toLowerCase().trim();
+  const map: Record<string, string> = {
+    percentage: "نسبة مئوية",
+    flash: "عرض سريع",
+    buy2get1: "اشترِ 2 واحصل على 1",
+    buy3pay2: "اشترِ 3 وادفع 2",
+    min_order: "حد أدنى للطلب",
+    product_specific: "منتج محدد",
+  };
+  return map[t] || (t ? t : "عرض");
+}
+
+function detectPreferredLanguage(text: string): "ar" | "en" {
+  const t = text.trim();
+  if (!t) return "ar";
+  let arabic = 0;
+  let latin = 0;
+  for (const ch of t.slice(0, 200)) {
+    if (/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/.test(ch)) arabic += 1;
+    if (/[a-zA-Z]/.test(ch)) latin += 1;
+  }
+  return arabic >= latin ? "ar" : "en";
+}
+
+async function fetchInventoryContextString(): Promise<string> {
+  try {
+    const { data, error } = await supabase
+      .from("inventory")
+      .select("id,name_ar,selling_price,currency,quantity,category,description")
+      .gt("quantity", 0)
+      .order("name_ar", { ascending: true })
+      .limit(50);
+    if (error || !data?.length) return "";
+    const lines = (data as InventoryAiRow[]).map((row) => {
+      const name = row.name_ar?.trim() || "—";
+      const price = row.selling_price ?? 0;
+      const cur = row.currency?.trim() || "QAR";
+      const qty = row.quantity ?? 0;
+      const cat = row.category?.trim() || "—";
+      return `${name} | ${price} ${cur} | الكمية: ${qty} | التصنيف: ${cat}`;
+    });
+    return `المخزون المتاح حالياً:\n\n${lines.join("\n")}`;
+  } catch {
+    return "";
+  }
+}
+
+async function fetchPromotionsContextString(): Promise<string> {
+  try {
+    const { data, error } = await supabase
+      .from("promotions")
+      .select("title,type,discount_value,applies_to,target_category")
+      .eq("is_active", true);
+    if (error || !data?.length) return "";
+    const lines = (data as PromotionAiRow[]).map((row) => {
+      const title = row.title?.trim() || "عرض";
+      const typeLabel = promotionTypeLabelAr(row.type);
+      const dv = row.discount_value ?? 0;
+      return `${title} | نوع: ${typeLabel} | خصم: ${dv}%`;
+    });
+    return `العروض الحالية:\n\n${lines.join("\n")}`;
+  } catch {
+    return "";
+  }
+}
+
+type CustomerProfileSnippet = {
+  message_count: number;
+  last_topic: string | null;
+};
+
+async function fetchCustomerProfileForPrompt(
+  userId: string | undefined
+): Promise<CustomerProfileSnippet | null> {
+  if (!userId?.trim()) return null;
+  try {
+    const { data, error } = await supabase
+      .from("ai_customer_profiles")
+      .select("message_count,last_topic,preferred_language")
+      .eq("user_id", userId.trim())
+      .maybeSingle();
+    if (error || !data) return null;
+    return {
+      message_count: Number(data.message_count ?? 0),
+      last_topic:
+        data.last_topic != null && String(data.last_topic).length > 0
+          ? String(data.last_topic)
+          : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function buildCustomerProfilePromptBlock(profile: CustomerProfileSnippet): string {
+  const topic = profile.last_topic?.trim() || "—";
+  return `عدد محادثاته السابقة: ${profile.message_count}\nآخر موضوع: ${topic}`;
+}
+
+async function recordCustomerTurn(payload: InvokeAiPayload): Promise<void> {
+  const userId = payload.userId?.trim();
+  if (!userId) return;
+  const userText =
+    typeof payload.message === "string" && payload.message.trim().length > 0
+      ? payload.message.trim()
+      : "[صورة]";
+  const lastTopic = userText.slice(0, 100);
+  const preferredLanguage = detectPreferredLanguage(userText);
+  try {
+    const { data: existing } = await supabase
+      .from("ai_customer_profiles")
+      .select("message_count")
+      .eq("user_id", userId)
+      .maybeSingle();
+    const nextCount = (existing?.message_count != null ? Number(existing.message_count) : 0) + 1;
+    const { error } = await supabase.from("ai_customer_profiles").upsert(
+      {
+        user_id: userId,
+        last_seen: new Date().toISOString(),
+        message_count: nextCount,
+        last_topic: lastTopic,
+        preferred_language: preferredLanguage,
+      },
+      { onConflict: "user_id" }
+    );
+    if (error) {
+      // Table missing or RLS: do not fail the chat
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
 export async function invokeMalyanAi(payload: InvokeAiPayload): Promise<InvokeAiResult> {
   const SYSTEM_PROMPT = `أنت مليان الذكي، مستشار متخصص في النباتات والحدائق لشركة مليان للحدائق في قطر.
 تتحدث فقط عن: النباتات، تصميم الحدائق، الصيانة، منتجات مليان.
 إذا سُئلت عن أي موضوع آخر قل: "أنا متخصص في عالم النباتات والحدائق فقط!"
 دائماً رد بنفس لغة المستخدم.`;
+
+  const [inventoryContext, promotionsContext, customerProfile] = await Promise.all([
+    fetchInventoryContextString(),
+    fetchPromotionsContextString(),
+    fetchCustomerProfileForPrompt(payload.userId),
+  ]);
+
+  let systemPrompt = SYSTEM_PROMPT;
+  if (inventoryContext) {
+    systemPrompt += `\n\n--- بيانات المخزون ---\n${inventoryContext}`;
+  }
+  if (promotionsContext) {
+    systemPrompt += `\n\n--- العروض النشطة ---\n${promotionsContext}`;
+  }
+  if (customerProfile) {
+    systemPrompt += `\n\n--- ملف العميل ---\n${buildCustomerProfilePromptBlock(customerProfile)}`;
+  }
 
   // Prefer a multimodal model when we have an image.
   const model = payload.image?.base64 ? "claude-sonnet-4-6" : "claude-haiku-4-5";
@@ -118,7 +285,7 @@ export async function invokeMalyanAi(payload: InvokeAiPayload): Promise<InvokeAi
     body: JSON.stringify({
       model,
       max_tokens: 1000,
-      system: SYSTEM_PROMPT,
+      system: systemPrompt,
       messages,
     }),
   });
@@ -132,6 +299,8 @@ export async function invokeMalyanAi(payload: InvokeAiPayload): Promise<InvokeAi
   if (!response.ok) {
     throw new Error(reply);
   }
+
+  await recordCustomerTurn(payload);
 
   return {
     conversationId: payload.conversationId ?? "",

@@ -15,6 +15,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { supabase } from "../lib/supabase";
 import { colors, radii, spacing } from "../lib/theme";
 import { MalyanLogo } from "../components/MalyanLogo";
 import { useCartStore } from "../store/cartStore";
@@ -128,10 +129,15 @@ export default function AiPlantDoctorScreen() {
 
     setLoading(true);
     try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
       const payload: InvokeAiPayload = {
         message:
           symptoms.trim() ||
           "أرجو تشخيص حالة النبات من الصورة واقتراح علاج مناسب لجو قطر.",
+        userId: user?.id,
         mode: "doctor",
         preferences: { plant_nature: pref },
         image: selectedImageBase64
