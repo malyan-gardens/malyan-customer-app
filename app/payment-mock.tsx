@@ -197,8 +197,10 @@ export default function PaymentMockScreen() {
             total: String(Number(ord?.total_amount ?? amount)),
           },
         });
-        useCartStore.getState().clear();
-        useCheckoutDraftStore.getState().reset();
+        setTimeout(() => {
+          useCartStore.getState().clear();
+          useCheckoutDraftStore.getState().reset();
+        }, 1000);
       } catch (e) {
         console.log(e);
         setLoading(false);
