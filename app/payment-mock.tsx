@@ -124,11 +124,10 @@ export default function PaymentMockScreen() {
           is_read: false,
         });
 
-        const draft = useCheckoutDraftStore.getState();
-        if (!draft.fromDirectProduct) useCartStore.getState().clear();
-        useCheckoutDraftStore.getState().reset();
         setLoading(false);
         router.replace("/order-success");
+        useCartStore.getState().clear();
+        useCheckoutDraftStore.getState().reset();
       } catch (e) {
         console.log(e);
         setLoading(false);

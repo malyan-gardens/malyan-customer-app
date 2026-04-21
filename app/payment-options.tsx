@@ -187,7 +187,6 @@ export default function PaymentOptionsScreen() {
           service: productLabel,
         },
       });
-      setTimeout(finalizeCart, 500);
     } catch (e) {
       setError(e instanceof Error ? e.message : "تعذر بدء الدفع.");
     } finally {
