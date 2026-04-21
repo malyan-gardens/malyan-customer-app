@@ -71,6 +71,37 @@ export default function PaymentOptionsScreen() {
     resetDraft();
   };
 
+  const buildInvoiceHtml = (input: {
+    orderId: string;
+    customerName: string;
+    items: Array<{ name: string; quantity: number; lineTotal: number; currency: string }>;
+    total: number;
+    paymentMethod: string;
+    address: string;
+  }): string => {
+    const rows = input.items
+      .map(
+        (i) =>
+          `<tr><td style="padding:8px;border:1px solid #ddd;">${i.name}</td><td style="padding:8px;border:1px solid #ddd;">${i.quantity}</td><td style="padding:8px;border:1px solid #ddd;">${i.lineTotal.toFixed(2)} ${i.currency}</td></tr>`
+      )
+      .join("");
+    return `
+      <div dir="rtl" style="font-family:Arial,sans-serif;line-height:1.8">
+        <h2>فاتورة طلبك من مليان للحدائق</h2>
+        <p><strong>رقم الطلب:</strong> ${input.orderId}</p>
+        <p><strong>العميل:</strong> ${input.customerName}</p>
+        <p><strong>العنوان:</strong> ${input.address || "—"}</p>
+        <p><strong>طريقة الدفع:</strong> ${input.paymentMethod}</p>
+        <table style="border-collapse:collapse;width:100%">
+          <thead><tr><th style="padding:8px;border:1px solid #ddd;">المنتج</th><th style="padding:8px;border:1px solid #ddd;">الكمية</th><th style="padding:8px;border:1px solid #ddd;">الإجمالي</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+        <p><strong>المجموع:</strong> ${input.total.toFixed(2)} QAR</p>
+        <p>شكراً لثقتكم بمليان للحدائق</p>
+      </div>
+    `;
+  };
+
   const insertOrderAndSave = async (input: {
     payment_method: string;
     status: string;
@@ -125,19 +156,34 @@ export default function PaymentOptionsScreen() {
         status: "pending_cash",
       });
       try {
-        await fetch("https://malyan-dashboard.vercel.app/api/send-invoice-email", {
+        let customerEmail = "";
+        try {
+          const {
+            data: { user },
+          } = await supabase.auth.getUser();
+          customerEmail = user?.email ?? "";
+        } catch {
+          customerEmail = "";
+        }
+        await fetch("/api/send-invoice-email", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            orderId,
-            customerName: customerName.trim(),
-            customerEmail: "",
-            items: serialized,
-            total,
-            paymentMethod: "الدفع كاش",
-            address: safeAddress,
-            discountAmount: 0,
-            discountLabel: "",
+            to: customerEmail,
+            subject: "فاتورة طلبك من مليان للحدائق",
+            html: buildInvoiceHtml({
+              orderId,
+              customerName: customerName.trim(),
+              items: serialized.map((i) => ({
+                name: i.name,
+                quantity: i.quantity,
+                lineTotal: i.lineTotal,
+                currency: i.currency,
+              })),
+              total,
+              paymentMethod: "الدفع كاش",
+              address: safeAddress,
+            }),
           }),
         });
       } catch {

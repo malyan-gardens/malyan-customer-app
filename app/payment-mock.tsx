@@ -11,8 +11,6 @@ import {
   TextInput,
   View,
 } from "react-native";
-import {
-} from "../lib/orderFlow";
 import { supabase } from "../lib/supabase";
 import { useCartStore } from "../store/cartStore";
 import { useCheckoutDraftStore } from "../store/checkoutDraftStore";
@@ -29,6 +27,37 @@ function formatExpiry(raw: string) {
   const digits = raw.replace(/\D/g, "").slice(0, 4);
   if (digits.length <= 2) return digits;
   return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+}
+
+function buildInvoiceHtml(input: {
+  orderId: string;
+  customerName: string;
+  items: Array<{ name: string; quantity: number; lineTotal: number; currency?: string }>;
+  total: number;
+  paymentMethod: string;
+  address: string;
+}): string {
+  const rows = input.items
+    .map(
+      (i) =>
+        `<tr><td style="padding:8px;border:1px solid #ddd;">${i.name}</td><td style="padding:8px;border:1px solid #ddd;">${i.quantity}</td><td style="padding:8px;border:1px solid #ddd;">${i.lineTotal.toFixed(2)} ${i.currency ?? "QAR"}</td></tr>`
+    )
+    .join("");
+  return `
+    <div dir="rtl" style="font-family:Arial,sans-serif;line-height:1.8">
+      <h2>فاتورة طلبك من مليان للحدائق</h2>
+      <p><strong>رقم الطلب:</strong> ${input.orderId}</p>
+      <p><strong>العميل:</strong> ${input.customerName}</p>
+      <p><strong>العنوان:</strong> ${input.address || "—"}</p>
+      <p><strong>طريقة الدفع:</strong> ${input.paymentMethod}</p>
+      <table style="border-collapse:collapse;width:100%">
+        <thead><tr><th style="padding:8px;border:1px solid #ddd;">المنتج</th><th style="padding:8px;border:1px solid #ddd;">الكمية</th><th style="padding:8px;border:1px solid #ddd;">الإجمالي</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <p><strong>المجموع:</strong> ${input.total.toFixed(2)} QAR</p>
+      <p>شكراً لثقتكم بمليان للحدائق</p>
+    </div>
+  `;
 }
 
 export default function PaymentMockScreen() {
@@ -94,20 +123,36 @@ export default function PaymentMockScreen() {
         if (fetchErr) throw fetchErr;
 
         const rawItems = Array.isArray(ord?.items) ? ord.items : [];
+        let customerEmail = "";
         try {
-          await fetch("https://malyan-dashboard.vercel.app/api/send-invoice-email", {
+          const {
+            data: { user },
+          } = await supabase.auth.getUser();
+          customerEmail = user?.email ?? "";
+        } catch {
+          customerEmail = "";
+        }
+        try {
+          const htmlItems = rawItems.map((row: Record<string, unknown>) => ({
+            name: String(row.name ?? "منتج"),
+            quantity: Number(row.quantity ?? 1),
+            lineTotal: Number(row.lineTotal ?? 0),
+            currency: String(row.currency ?? "QAR"),
+          }));
+          await fetch("/api/send-invoice-email", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              orderId: orderIdStr,
-              customerName: ord?.customer_name ?? "",
-              customerEmail: "",
-              items: rawItems,
-              total: Number(ord?.total_amount ?? amount),
-              paymentMethod: "الدفع أونلاين",
-              address: ord?.address ?? "",
-              discountAmount: 0,
-              discountLabel: "",
+              to: customerEmail,
+              subject: "فاتورة طلبك من مليان للحدائق",
+              html: buildInvoiceHtml({
+                orderId: orderIdStr,
+                customerName: String(ord?.customer_name ?? ""),
+                items: htmlItems,
+                total: Number(ord?.total_amount ?? amount),
+                paymentMethod: "الدفع أونلاين",
+                address: String(ord?.address ?? ""),
+              }),
             }),
           });
         } catch {
