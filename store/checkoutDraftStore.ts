@@ -6,6 +6,7 @@ export type CheckoutDraftState = {
   fromDirectProduct: boolean;
   customerName: string;
   customerPhone: string;
+  phoneNumber: string;
   notes: string;
   latitude: number | null;
   longitude: number | null;
@@ -19,6 +20,7 @@ export type CheckoutDraftState = {
     notes: string;
   }) => void;
   setLocationStep: (latitude: number, longitude: number, address: string) => void;
+  setPhoneNumber: (phone: string) => void;
   reset: () => void;
 };
 
@@ -27,6 +29,7 @@ const initial = {
   fromDirectProduct: false,
   customerName: "",
   customerPhone: "",
+  phoneNumber: "",
   notes: "",
   latitude: null as number | null,
   longitude: null as number | null,
@@ -41,6 +44,7 @@ export const useCheckoutDraftStore = create<CheckoutDraftState>((set) => ({
       fromDirectProduct: data.fromDirectProduct,
       customerName: data.customerName,
       customerPhone: data.customerPhone,
+      phoneNumber: data.customerPhone,
       notes: data.notes,
       latitude: null,
       longitude: null,
@@ -48,5 +52,6 @@ export const useCheckoutDraftStore = create<CheckoutDraftState>((set) => ({
     }),
   setLocationStep: (latitude, longitude, address) =>
     set({ latitude, longitude, address }),
+  setPhoneNumber: (phone) => set({ phoneNumber: phone }),
   reset: () => set(initial),
 }));
