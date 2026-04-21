@@ -174,6 +174,40 @@ export default function PaymentMockScreen() {
         });
         console.log("4. Notification inserted");
 
+        const today = new Date().toISOString().split("T")[0];
+        const { data: userData } = await supabase.auth.getUser();
+        const customerEmailForInvoice = userData?.user?.email ?? "";
+        const invoiceItems = (rawItems as Record<string, unknown>[]).map((item) => ({
+          description: String(item.name ?? "منتج"),
+          unit: "قطعة",
+          qty: Number(item.quantity ?? 1),
+          rate: Number(item.unitPrice ?? 0),
+          amount: Number(item.lineTotal ?? 0),
+        }));
+
+        try {
+          await supabase.from("invoices").insert({
+            customer_name: String(ord?.customer_name ?? ""),
+            customer_email: customerEmailForInvoice,
+            customer_phone: String(ord?.customer_phone ?? ""),
+            customer_address: String(ord?.address ?? "الدوحة، قطر"),
+            items: invoiceItems,
+            subtotal: Number(ord?.total_amount ?? amount),
+            discount: 0,
+            previous_payments: 0,
+            partial_payment: 0,
+            total_amount: Number(ord?.total_amount ?? amount),
+            payment_method: "دفع إلكتروني",
+            payment_status: "paid",
+            issued_date: today,
+            due_date: today,
+            notes: `طلب رقم: ${orderIdStr}`,
+          });
+          console.log("6. Invoice created");
+        } catch (invErr) {
+          console.error("Invoice creation failed:", invErr);
+        }
+
         console.log("5. About to navigate to order-success");
         setSuccess(true);
         return;
