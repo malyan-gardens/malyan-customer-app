@@ -176,9 +176,6 @@ export default function PaymentMockScreen() {
 
         console.log("5. About to navigate to order-success");
         setSuccess(true);
-        setLoading(false);
-        useCartStore.getState().clear();
-        useCheckoutDraftStore.getState().reset();
         return;
       } catch (e) {
         console.error("PATH A ERROR:", e instanceof Error ? e.message : JSON.stringify(e));
