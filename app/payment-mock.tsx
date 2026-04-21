@@ -117,12 +117,11 @@ export default function PaymentMockScreen() {
 
         await supabase.from("notifications").insert({
           title: "تم دفع طلب أونلاين",
-          message: `طلب ${orderIdStr.slice(0, 8)} — ${Number(ord?.total_amount ?? amount)} QAR`,
-          body: `طلب ${orderIdStr}`,
+          body: `${String(ord?.customer_name ?? "عميل")} — ${service}`,
           type: "order",
           reference_id: orderIdStr,
           reference_type: "orders",
-          read: false,
+          is_read: false,
         });
 
         const draft = useCheckoutDraftStore.getState();

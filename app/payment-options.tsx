@@ -107,12 +107,11 @@ export default function PaymentOptionsScreen() {
 
     await supabase.from("notifications").insert({
       title: "طلب جديد",
-      message: `${customerName.trim()} — ${productLabel} (${input.status})`,
       body: `${customerName.trim()} — ${productLabel}`,
       type: "order",
       reference_id: orderId,
       reference_type: "orders",
-      read: false,
+      is_read: false,
     });
     return orderId;
   };
@@ -170,12 +169,11 @@ export default function PaymentOptionsScreen() {
 
       await supabase.from("notifications").insert({
         title: "طلب — بانتظار الدفع",
-        message: `${customerName.trim()} — ${productLabel}`,
         body: `${customerName.trim()} — ${productLabel}`,
         type: "order",
         reference_id: orderId,
         reference_type: "orders",
-        read: false,
+        is_read: false,
       });
 
       router.push({
