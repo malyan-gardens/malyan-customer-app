@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Platform,
@@ -50,10 +50,8 @@ export default function PaymentMockScreen() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [userName, setUserName] = useState("عميل مليان");
-  const [userEmail, setUserEmail] = useState("");
   const [issuedDate, setIssuedDate] = useState("");
   const [invoiceRow, setInvoiceRow] = useState<Record<string, any> | null>(null);
-  const emailSentRef = useRef(false);
 
   useEffect(() => {
     if (Platform.OS !== "web" || typeof document === "undefined") return;
@@ -112,22 +110,13 @@ export default function PaymentMockScreen() {
         </div>
         <div style="text-align: center; margin-top: 20px; color: #666;">
           <p>شكراً لثقتكم بمليان للتجارة والحدائق</p>
-          <p>+974 31252262 | Info@Malyangardens.com | www.malyangardens.com</p>
+          <p>واتساب: wa.me/97400000000 | Info@Malyangardens.com | www.malyangardens.com</p>
         </div>
       </div>
     `;
 
-  const sendEmailViaApi = async (to: string, subject: string, html: string) => {
-    await fetch("/api/send-email", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ to, subject, html }),
-    });
-  };
-
   const confirmPayment = async () => {
     setLoading(true);
-    emailSentRef.current = false;
 
     const orderIdRaw = params.orderId;
     const orderIdStr =
@@ -153,6 +142,27 @@ export default function PaymentMockScreen() {
         if (fetchErr) throw fetchErr;
 
         const rawItems = Array.isArray(ord?.items) ? ord.items : [];
+        for (const row of rawItems as Record<string, unknown>[]) {
+          const productId = String(row.productId ?? "");
+          if (!productId) continue;
+          const orderedQty = Number(row.quantity ?? 0);
+          if (orderedQty <= 0) continue;
+
+          const { data: inv } = await supabase
+            .from("inventory")
+            .select("quantity")
+            .eq("id", productId)
+            .single();
+
+          if (inv && Number(inv.quantity ?? 0) > 0) {
+            const newQty = Math.max(0, Number(inv.quantity ?? 0) - orderedQty);
+            await supabase
+              .from("inventory")
+              .update({ quantity: newQty })
+              .eq("id", productId);
+          }
+        }
+
         const itemsForMsg: SerializedOrderItem[] = rawItems.map((row: Record<string, unknown>) => ({
           productId: String(row.productId ?? ""),
           name: String(row.name ?? ""),
@@ -185,14 +195,15 @@ export default function PaymentMockScreen() {
           reference_type: "orders",
           read: false,
         });
-      } catch (e) {
-        console.log(e);
-      } finally {
+
         const draft = useCheckoutDraftStore.getState();
         if (!draft.fromDirectProduct) useCartStore.getState().clear();
         useCheckoutDraftStore.getState().reset();
         setLoading(false);
         router.replace("/order-success");
+      } catch (e) {
+        console.log(e);
+        setLoading(false);
       }
       return;
     }
@@ -253,36 +264,19 @@ export default function PaymentMockScreen() {
     }
 
     try {
-      if (nextUserEmail) {
-        if (emailSentRef.current) {
-          setLoading(false);
-          setSuccess(true);
-          return;
-        }
-        emailSentRef.current = true;
-        const { data: latestInvoice } = await supabase
-          .from("invoices")
-          .select("*")
-          .eq("customer_email", nextUserEmail)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        const latestNumber = latestInvoice?.invoice_number ?? "";
-        const subject = `فاتورة مليان للحدائق - ${latestNumber}`;
-        const html = buildInvoiceHtml(nextUserName, nextUserEmail, latestNumber, dateLabel);
-        await sendEmailViaApi(nextUserEmail, subject, html);
-      }
-    } catch (e) {
-      console.log(e);
-    }
-
-    try {
       const body = `تم استلام ${amount} QAR مقابل ${service}`;
       await supabase.from("notifications").insert({
         title: "دفع إلكتروني ناجح",
         body,
         type: "order",
       });
+    } catch (e) {
+      console.log(e);
+    }
+
+    try {
+      const whatsappText = `تم استلام دفعة أونلاين بقيمة ${amount} QAR مقابل ${service}.`;
+      await openInvoiceWhatsAppToBusiness(whatsappText);
     } catch (e) {
       console.log(e);
     }
@@ -303,7 +297,6 @@ export default function PaymentMockScreen() {
     }
 
     setUserName(nextUserName);
-    setUserEmail(nextUserEmail);
     setIssuedDate(dateLabel);
     setLoading(false);
     setSuccess(true);
@@ -349,11 +342,9 @@ export default function PaymentMockScreen() {
               <Text style={styles.receiptStatus}>حالة الدفع: مدفوع ✅</Text>
             </View>
 
-            <View style={styles.bankBox}>
-              <Text style={styles.bankTitle}>تفاصيل البنك</Text>
-              <Text style={styles.bankText}>Qatar National Bank (QNB)</Text>
-              <Text style={styles.bankText}>Account: 0260-572537-001</Text>
-              <Text style={styles.bankText}>IBAN: QA82QNBA000000000260572537001</Text>
+            <View style={styles.thanksBox}>
+              <Text style={styles.thanksText}>شكراً لثقتكم بمليان للحدائق</Text>
+              <Text style={styles.thanksText}>تواصل معنا: wa.me/97400000000</Text>
             </View>
 
             <View style={styles.stamp}>
@@ -510,9 +501,8 @@ const styles = StyleSheet.create({
   th: { color: "#fff", fontSize: 12, fontWeight: "700", width: "24%", textAlign: "center", fontFamily: font },
   td: { color: "#111827", fontSize: 12, width: "24%", textAlign: "center", fontFamily: font },
   totalBox: { marginTop: 12, alignItems: "flex-end" },
-  bankBox: { marginTop: 12, padding: 10, borderRadius: 8, backgroundColor: "#f3f4f6" },
-  bankTitle: { color: "#111827", fontWeight: "800", textAlign: "right", fontFamily: font },
-  bankText: { color: "#374151", textAlign: "right", fontFamily: font, marginTop: 2 },
+  thanksBox: { marginTop: 12, padding: 10, borderRadius: 8, backgroundColor: "#f3f4f6" },
+  thanksText: { color: "#374151", textAlign: "right", fontFamily: font, marginTop: 2 },
   stamp: {
     alignSelf: "center",
     marginTop: 16,
