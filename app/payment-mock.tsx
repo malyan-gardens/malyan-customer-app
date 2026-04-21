@@ -1,6 +1,5 @@
-import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   ActivityIndicator,
   Platform,
@@ -74,27 +73,6 @@ export default function PaymentMockScreen() {
   const [expiry, setExpiry] = useState("");
   const [cvv, setCvv] = useState("");
   const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [userName, setUserName] = useState("عميل مليان");
-  const [issuedDate, setIssuedDate] = useState("");
-  const [invoiceRow, setInvoiceRow] = useState<Record<string, any> | null>(null);
-
-  useEffect(() => {
-    if (Platform.OS !== "web" || typeof document === "undefined") return;
-    const style = document.createElement("style");
-    style.innerHTML = `
-      @media print {
-        #invoice-actions { display: none !important; }
-        body * { visibility: hidden; }
-        #invoice-print, #invoice-print * { visibility: visible; }
-        #invoice-print { position: absolute; left: 0; top: 0; width: 100%; }
-      }
-    `;
-    document.head.appendChild(style);
-    return () => {
-      document.head.removeChild(style);
-    };
-  }, []);
 
   const confirmPayment = async () => {
     setLoading(true);
@@ -211,7 +189,6 @@ export default function PaymentMockScreen() {
     let nextUserName = "عميل مليان";
     let nextUserEmail = "";
     const today = new Date().toISOString().split("T")[0];
-    const dateLabel = new Date().toLocaleDateString("ar-QA");
 
     try {
       const { data: userData } = await supabase.auth.getUser();
@@ -258,7 +235,26 @@ export default function PaymentMockScreen() {
         })
         .select("invoice_number")
         .single();
-      void invoiceData;
+      try {
+        await fetch("/api/send-invoice-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            to: nextUserEmail,
+            subject: "فاتورة طلبك من مليان للحدائق",
+            html: buildInvoiceHtml({
+              orderId: String(invoiceData?.invoice_number ?? "direct"),
+              customerName: nextUserName,
+              items: [{ name: service, quantity: 1, lineTotal: amount, currency: "QAR" }],
+              total: amount,
+              paymentMethod: "الدفع أونلاين",
+              address: "Doha, Qatar",
+            }),
+          }),
+        });
+      } catch {
+        // silently skip if email fails
+      }
     } catch (e) {
       console.log(e);
     }
@@ -274,95 +270,18 @@ export default function PaymentMockScreen() {
       console.log(e);
     }
 
-    try {
-      if (nextUserEmail) {
-        const { data: latestInvoice } = await supabase
-          .from("invoices")
-          .select("*")
-          .eq("customer_email", nextUserEmail)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        setInvoiceRow((latestInvoice as Record<string, any> | null) ?? null);
-      }
-    } catch (e) {
-      console.log(e);
-    }
-
-    setUserName(nextUserName);
-    setIssuedDate(dateLabel);
     setLoading(false);
-    setSuccess(true);
-  };
-
-  if (success) {
-    return (
-      <SafeAreaView style={styles.screen}>
-        <View style={styles.successWrap} nativeID="invoice-print">
-          <View style={styles.invoiceHeader}>
-            <Text style={styles.invoiceHeaderTitle}>مليان للتجارة والحدائق | Malyan For Trading and Gardens</Text>
-            <Text style={styles.invoiceHeaderSub}>CR No: 189013, Doha - Qatar</Text>
-          </View>
-          <Text style={styles.successText}>✅ تم الدفع بنجاح!</Text>
-
-          <View style={styles.receiptCard}>
-            <Text style={styles.receiptLine}>
-              رقم الفاتورة: {String(invoiceRow?.invoice_number ?? "—")}
-            </Text>
-            <Text style={styles.receiptLine}>
-              التاريخ: {String((invoiceRow?.issued_date ?? issuedDate) || new Date().toLocaleDateString("ar-QA"))}
-            </Text>
-            <Text style={styles.receiptLine}>العميل: {String(invoiceRow?.customer_name ?? userName)}</Text>
-            <Text style={styles.receiptLine}>الخدمة: {service}</Text>
-
-            <View style={styles.table}>
-              <View style={[styles.tableRow, styles.tableHead]}>
-                <Text style={styles.th}>الوصف</Text>
-                <Text style={styles.th}>الكمية</Text>
-                <Text style={styles.th}>السعر</Text>
-                <Text style={styles.th}>الإجمالي</Text>
-              </View>
-              <View style={styles.tableRow}>
-                <Text style={styles.td}>{service}</Text>
-                <Text style={styles.td}>1</Text>
-                <Text style={styles.td}>{amount} QAR</Text>
-                <Text style={styles.td}>{amount} QAR</Text>
-              </View>
-            </View>
-
-            <View style={styles.totalBox}>
-              <Text style={styles.receiptStatus}>الإجمالي: {amount} QAR</Text>
-              <Text style={styles.receiptStatus}>حالة الدفع: مدفوع ✅</Text>
-            </View>
-
-            <View style={styles.thanksBox}>
-              <Text style={styles.thanksText}>شكراً لثقتكم بمليان للحدائق</Text>
-              <Text style={styles.thanksText}>تواصل معنا: wa.me/97400000000</Text>
-            </View>
-
-            <View style={styles.stamp}>
-              <Text style={styles.stampText}>مليان</Text>
-              <Text style={styles.stampSmall}>CR 189013</Text>
-            </View>
-            <Text style={styles.footerText}>www.malyangardens.com</Text>
-          </View>
-
-          <View style={styles.actions} nativeID="invoice-actions">
-            <Pressable
-              style={styles.receiptBtn}
-              onPress={() => {
-                if (Platform.OS === "web" && typeof window !== "undefined") window.print();
-              }}
-            >
-              <Text style={styles.receiptBtnText}>🖨️ طباعة الفاتورة</Text>
-            </Pressable>
-            <Pressable style={styles.receiptBtnHome} onPress={() => router.replace("/(tabs)/home")}>
-              <Text style={styles.receiptBtnHomeText}>🏠 العودة للرئيسية</Text>
-            </Pressable>
-          </View>
-        </View>
-      </SafeAreaView>
-    );
+    router.replace({
+      pathname: "/order-success",
+      params: {
+        orderId: "direct",
+        total: String(amount),
+      },
+    });
+    setTimeout(() => {
+      useCartStore.getState().clear();
+      useCheckoutDraftStore.getState().reset();
+    }, 1000);
   }
 
   return (
@@ -464,69 +383,4 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   payText: { color: "#fff", fontWeight: "800", fontSize: 16, fontFamily: font },
-  successWrap: { flex: 1, alignItems: "center", justifyContent: "center" },
-  successText: { marginTop: 14, color: "#15803d", fontSize: 22, fontWeight: "800", fontFamily: font },
-  invoiceHeader: {
-    width: "92%",
-    backgroundColor: "#1a7a3c",
-    paddingVertical: 16,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    alignItems: "center",
-  },
-  invoiceHeaderTitle: { color: "#fff", fontWeight: "800", textAlign: "center", fontFamily: font },
-  invoiceHeaderSub: { color: "#e5e7eb", marginTop: 4, fontFamily: font },
-  receiptCard: {
-    marginTop: 18,
-    width: "92%",
-    borderWidth: 1,
-    borderColor: "#cbd5e1",
-    borderRadius: 12,
-    padding: 14,
-    backgroundColor: "#f8fafc",
-    gap: 6,
-  },
-  receiptLine: { color: "#0f172a", fontSize: 14, fontFamily: font, textAlign: "right" },
-  receiptStatus: { color: "#15803d", fontWeight: "800", fontFamily: font, textAlign: "right", marginTop: 4 },
-  table: { marginTop: 12, borderWidth: 1, borderColor: "#d1d5db", borderRadius: 8, overflow: "hidden" },
-  tableRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 8, paddingHorizontal: 8 },
-  tableHead: { backgroundColor: "#1a7a3c" },
-  th: { color: "#fff", fontSize: 12, fontWeight: "700", width: "24%", textAlign: "center", fontFamily: font },
-  td: { color: "#111827", fontSize: 12, width: "24%", textAlign: "center", fontFamily: font },
-  totalBox: { marginTop: 12, alignItems: "flex-end" },
-  thanksBox: { marginTop: 12, padding: 10, borderRadius: 8, backgroundColor: "#f3f4f6" },
-  thanksText: { color: "#374151", textAlign: "right", fontFamily: font, marginTop: 2 },
-  stamp: {
-    alignSelf: "center",
-    marginTop: 16,
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    borderWidth: 2,
-    borderColor: "#16a34a",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  stampText: { color: "#16a34a", fontWeight: "800", fontFamily: font },
-  stampSmall: { color: "#16a34a", fontSize: 11, fontFamily: font },
-  footerText: { marginTop: 10, textAlign: "center", color: "#6b7280", fontFamily: font },
-  actions: { width: "92%" },
-  receiptBtn: {
-    marginTop: 10,
-    width: "100%",
-    backgroundColor: QNB_BLUE,
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: "center",
-  },
-  receiptBtnText: { color: "#fff", fontWeight: "700", fontFamily: font },
-  receiptBtnHome: {
-    marginTop: 10,
-    width: "100%",
-    backgroundColor: "#16a34a",
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: "center",
-  },
-  receiptBtnHomeText: { color: "#fff", fontWeight: "800", fontFamily: font },
 });
