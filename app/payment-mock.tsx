@@ -175,10 +175,10 @@ export default function PaymentMockScreen() {
         console.log("4. Notification inserted");
 
         console.log("5. About to navigate to order-success");
+        setSuccess(true);
+        setLoading(false);
         useCartStore.getState().clear();
         useCheckoutDraftStore.getState().reset();
-        setLoading(false);
-        setSuccess(true);
         return;
       } catch (e) {
         console.error("PATH A ERROR:", e instanceof Error ? e.message : JSON.stringify(e));
@@ -272,10 +272,10 @@ export default function PaymentMockScreen() {
       console.log(e);
     }
 
+    setSuccess(true);
+    setLoading(false);
     useCartStore.getState().clear();
     useCheckoutDraftStore.getState().reset();
-    setLoading(false);
-    setSuccess(true);
     return;
   }
 
