@@ -120,12 +120,15 @@ export default function PaymentOptionsScreen() {
     setError(null);
     setBusy("cash");
     try {
-      await insertOrderAndSave({
+      const orderId = await insertOrderAndSave({
         payment_method: "cash",
         status: "pending_cash",
       });
-      finalizeCart();
-      router.replace("/order-success");
+      router.replace({
+        pathname: "/order-success",
+        params: { orderId, total: String(total) },
+      });
+      setTimeout(finalizeCart, 500);
     } catch (e) {
       setError(e instanceof Error ? e.message : "تعذر تأكيد الطلب.");
     } finally {
@@ -184,6 +187,7 @@ export default function PaymentOptionsScreen() {
           service: productLabel,
         },
       });
+      setTimeout(finalizeCart, 500);
     } catch (e) {
       setError(e instanceof Error ? e.message : "تعذر بدء الدفع.");
     } finally {
