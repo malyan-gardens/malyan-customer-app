@@ -75,6 +75,7 @@ export default function PaymentMockScreen() {
   const [loading, setLoading] = useState(false);
 
   const confirmPayment = async () => {
+    console.log("DEBUG orderId:", params.orderId, "orderIdStr will be:", typeof params.orderId);
     setLoading(true);
 
     const orderIdRaw = params.orderId;
