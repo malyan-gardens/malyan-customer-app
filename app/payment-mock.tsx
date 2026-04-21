@@ -93,6 +93,7 @@ export default function PaymentMockScreen() {
           .update({ status: "paid" })
           .eq("id", orderIdStr);
         if (upErr) throw upErr;
+        console.log("1. Order status updated to paid");
 
         const { data: ord, error: fetchErr } = await supabase
           .from("orders")
@@ -100,6 +101,7 @@ export default function PaymentMockScreen() {
           .eq("id", orderIdStr)
           .single();
         if (fetchErr) throw fetchErr;
+        console.log("2. Order fetched:", ord?.id);
 
         const rawItems = Array.isArray(ord?.items) ? ord.items : [];
         let customerEmail = "";
@@ -137,6 +139,7 @@ export default function PaymentMockScreen() {
         } catch {
           // silently skip if email fails
         }
+        console.log("3. Email sent");
 
         for (const row of rawItems as Record<string, unknown>[]) {
           const productId = String(row.productId ?? "");
@@ -167,8 +170,10 @@ export default function PaymentMockScreen() {
           reference_type: "orders",
           is_read: false,
         });
+        console.log("4. Notification inserted");
 
         setLoading(false);
+        console.log("5. About to navigate to order-success");
         router.replace({
           pathname: "/order-success",
           params: {
