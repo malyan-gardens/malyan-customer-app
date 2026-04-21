@@ -74,6 +74,17 @@ export default function PaymentMockScreen() {
   const [cvv, setCvv] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const navigateToOrderSuccess = (orderId: string, totalValue: string) => {
+    const target = {
+      pathname: "/order-success" as const,
+      params: { orderId, total: totalValue },
+    };
+    router.navigate(target);
+    setTimeout(() => {
+      router.replace(target);
+    }, 100);
+  };
+
   const confirmPayment = async () => {
     console.log("DEBUG orderId:", params.orderId, "orderIdStr will be:", typeof params.orderId);
     setLoading(true);
@@ -176,13 +187,7 @@ export default function PaymentMockScreen() {
         useCartStore.getState().clear();
         useCheckoutDraftStore.getState().reset();
         setLoading(false);
-        router.push({
-          pathname: "/order-success",
-          params: {
-            orderId: orderIdStr,
-            total: String(Number(ord?.total_amount ?? amount)),
-          },
-        });
+        navigateToOrderSuccess(orderIdStr, String(Number(ord?.total_amount ?? amount)));
         return;
       } catch (e) {
         console.error("PATH A ERROR:", e instanceof Error ? e.message : JSON.stringify(e));
@@ -279,13 +284,7 @@ export default function PaymentMockScreen() {
     useCartStore.getState().clear();
     useCheckoutDraftStore.getState().reset();
     setLoading(false);
-    router.push({
-      pathname: "/order-success",
-      params: {
-        orderId: "direct",
-        total: String(amount),
-      },
-    });
+    navigateToOrderSuccess("direct", String(amount));
     return;
   }
 
