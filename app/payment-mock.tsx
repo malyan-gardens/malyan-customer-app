@@ -176,7 +176,7 @@ export default function PaymentMockScreen() {
         useCartStore.getState().clear();
         useCheckoutDraftStore.getState().reset();
         setLoading(false);
-        router.replace({
+        router.push({
           pathname: "/order-success",
           params: {
             orderId: orderIdStr,
@@ -279,7 +279,7 @@ export default function PaymentMockScreen() {
     useCartStore.getState().clear();
     useCheckoutDraftStore.getState().reset();
     setLoading(false);
-    router.replace({
+    router.push({
       pathname: "/order-success",
       params: {
         orderId: "direct",
