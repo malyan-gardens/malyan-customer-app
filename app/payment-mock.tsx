@@ -172,8 +172,10 @@ export default function PaymentMockScreen() {
         });
         console.log("4. Notification inserted");
 
-        setLoading(false);
         console.log("5. About to navigate to order-success");
+        useCartStore.getState().clear();
+        useCheckoutDraftStore.getState().reset();
+        setLoading(false);
         router.replace({
           pathname: "/order-success",
           params: {
@@ -181,10 +183,7 @@ export default function PaymentMockScreen() {
             total: String(Number(ord?.total_amount ?? amount)),
           },
         });
-        setTimeout(() => {
-          useCartStore.getState().clear();
-          useCheckoutDraftStore.getState().reset();
-        }, 1000);
+        return;
       } catch (e) {
         console.error("PATH A ERROR:", e instanceof Error ? e.message : JSON.stringify(e));
         console.log(e);
@@ -277,6 +276,8 @@ export default function PaymentMockScreen() {
       console.log(e);
     }
 
+    useCartStore.getState().clear();
+    useCheckoutDraftStore.getState().reset();
     setLoading(false);
     router.replace({
       pathname: "/order-success",
@@ -285,10 +286,7 @@ export default function PaymentMockScreen() {
         total: String(amount),
       },
     });
-    setTimeout(() => {
-      useCartStore.getState().clear();
-      useCheckoutDraftStore.getState().reset();
-    }, 1000);
+    return;
   }
 
   return (
