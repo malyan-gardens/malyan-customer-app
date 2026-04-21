@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuthStore } from "../lib/authStore";
+import { supabase } from "../lib/supabase";
 import { cartTotal, useCartStore, type CartLine } from "../store/cartStore";
 import { useCheckoutDraftStore } from "../store/checkoutDraftStore";
 import { colors, radii, shadows, spacing } from "../lib/theme";
@@ -64,19 +65,38 @@ export default function CheckoutScreen() {
   const discountLabel = params.discountLabel ? String(params.discountLabel) : "";
 
   const [customerName, setCustomerName] = useState("");
-  const [customerPhone, setCustomerPhone] = useState("");
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user || cancelled) return;
+        const fullName = String(user.user_metadata?.full_name ?? "").trim();
+        const email = String(user.email ?? "").trim();
+        if (fullName) {
+          setCustomerName(fullName);
+        } else if (email) {
+          setCustomerName(email);
+        }
+      } catch {
+        // Keep manual name entry if user profile fetch fails.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const continueToLocation = () => {
     setError(null);
     if (!customerName.trim()) {
       setError("يرجى إدخال الاسم.");
-      return;
-    }
-    if (!customerPhone.trim()) {
-      setError("يرجى إدخال رقم الهاتف.");
       return;
     }
     if (orderItems.length === 0) {
@@ -89,7 +109,7 @@ export default function CheckoutScreen() {
       orderLines: orderItems,
       fromDirectProduct: Boolean(directProduct),
       customerName: customerName.trim(),
-      customerPhone: customerPhone.trim(),
+      customerPhone: "",
       notes: notes.trim(),
     });
     setSubmitting(false);
@@ -181,15 +201,6 @@ export default function CheckoutScreen() {
             onChangeText={setCustomerName}
             placeholder="الاسم الكامل"
             placeholderTextColor={colors.textMuted}
-            style={styles.input}
-          />
-          <Text style={styles.label}>رقم الهاتف</Text>
-          <TextInput
-            value={customerPhone}
-            onChangeText={setCustomerPhone}
-            placeholder="+974 …"
-            placeholderTextColor={colors.textMuted}
-            keyboardType="phone-pad"
             style={styles.input}
           />
 

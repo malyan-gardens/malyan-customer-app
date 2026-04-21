@@ -16,7 +16,7 @@ export type CheckoutDraftState = {
     orderLines: CartLine[];
     fromDirectProduct: boolean;
     customerName: string;
-    customerPhone: string;
+    customerPhone?: string;
     notes: string;
   }) => void;
   setLocationStep: (latitude: number, longitude: number, address: string) => void;
@@ -43,8 +43,8 @@ export const useCheckoutDraftStore = create<CheckoutDraftState>((set) => ({
       orderLines: data.orderLines,
       fromDirectProduct: data.fromDirectProduct,
       customerName: data.customerName,
-      customerPhone: data.customerPhone,
-      phoneNumber: data.customerPhone,
+      customerPhone: data.customerPhone ?? "",
+      phoneNumber: "",
       notes: data.notes,
       latitude: null,
       longitude: null,

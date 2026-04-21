@@ -29,6 +29,7 @@ export default function PaymentOptionsScreen() {
   const fromDirectProduct = useCheckoutDraftStore((s) => s.fromDirectProduct);
   const customerName = useCheckoutDraftStore((s) => s.customerName);
   const customerPhone = useCheckoutDraftStore((s) => s.customerPhone);
+  const phoneNumber = useCheckoutDraftStore((s) => s.phoneNumber);
   const notes = useCheckoutDraftStore((s) => s.notes);
   const latitude = useCheckoutDraftStore((s) => s.latitude);
   const longitude = useCheckoutDraftStore((s) => s.longitude);
@@ -52,10 +53,11 @@ export default function PaymentOptionsScreen() {
   const serialized = serializeOrderItems(orderLines);
   const productLabel = orderPrimaryLabel(orderLines);
   const safeAddress = address?.trim() ?? "";
+  const effectivePhone = phoneNumber.trim() || customerPhone.trim();
 
   const basePayload = {
     customer_name: customerName.trim(),
-    customer_phone: customerPhone.trim(),
+    customer_phone: effectivePhone,
     items: serialized,
     total_amount: Math.round(total * 100) / 100,
     delivery_date: null as string | null,
@@ -120,7 +122,7 @@ export default function PaymentOptionsScreen() {
     const invoiceText = buildOrderInvoiceMessage({
       orderId,
       customerName: customerName.trim(),
-      customerPhone: customerPhone.trim(),
+      customerPhone: effectivePhone,
       address: safeAddress,
       latitude,
       longitude,
