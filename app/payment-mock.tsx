@@ -180,6 +180,7 @@ export default function PaymentMockScreen() {
           useCheckoutDraftStore.getState().reset();
         }, 1000);
       } catch (e) {
+        console.error("PATH A ERROR:", e instanceof Error ? e.message : JSON.stringify(e));
         console.log(e);
         setLoading(false);
       }
