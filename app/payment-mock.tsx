@@ -1,5 +1,6 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
+import { Ionicons } from "@expo/vector-icons";
 import {
   ActivityIndicator,
   Platform,
@@ -73,17 +74,7 @@ export default function PaymentMockScreen() {
   const [expiry, setExpiry] = useState("");
   const [cvv, setCvv] = useState("");
   const [loading, setLoading] = useState(false);
-
-  const navigateToOrderSuccess = (orderId: string, totalValue: string) => {
-    const target = {
-      pathname: "/order-success" as const,
-      params: { orderId, total: totalValue },
-    };
-    router.navigate(target);
-    setTimeout(() => {
-      router.replace(target);
-    }, 100);
-  };
+  const [success, setSuccess] = useState(false);
 
   const confirmPayment = async () => {
     console.log("DEBUG orderId:", params.orderId, "orderIdStr will be:", typeof params.orderId);
@@ -187,7 +178,7 @@ export default function PaymentMockScreen() {
         useCartStore.getState().clear();
         useCheckoutDraftStore.getState().reset();
         setLoading(false);
-        navigateToOrderSuccess(orderIdStr, String(Number(ord?.total_amount ?? amount)));
+        setSuccess(true);
         return;
       } catch (e) {
         console.error("PATH A ERROR:", e instanceof Error ? e.message : JSON.stringify(e));
@@ -284,8 +275,36 @@ export default function PaymentMockScreen() {
     useCartStore.getState().clear();
     useCheckoutDraftStore.getState().reset();
     setLoading(false);
-    navigateToOrderSuccess("direct", String(amount));
+    setSuccess(true);
     return;
+  }
+
+  if (success) {
+    return (
+      <SafeAreaView style={styles.screen}>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 24 }}>
+          <Ionicons name="checkmark-circle" size={80} color="#16a34a" />
+          <Text style={{ color: "#fff", fontSize: 22, fontWeight: "800", marginTop: 16, textAlign: "center" }}>
+            تم الدفع بنجاح! ✅
+          </Text>
+          <Text style={{ color: "#c9a84c", fontSize: 18, fontWeight: "700", marginTop: 8 }}>
+            {amount} QAR
+          </Text>
+          <Pressable
+            style={{
+              marginTop: 32,
+              backgroundColor: "#1a7a3c",
+              paddingVertical: 14,
+              paddingHorizontal: 32,
+              borderRadius: 12,
+            }}
+            onPress={() => router.replace("/(tabs)/home")}
+          >
+            <Text style={{ color: "#fff", fontWeight: "800", fontSize: 16 }}>العودة للرئيسية</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
   }
 
   return (
