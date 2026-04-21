@@ -12,9 +12,6 @@ import {
   View,
 } from "react-native";
 import {
-  buildOrderInvoiceMessage,
-  openInvoiceWhatsAppToBusiness,
-  type SerializedOrderItem,
 } from "../lib/orderFlow";
 import { supabase } from "../lib/supabase";
 import { useCartStore } from "../store/cartStore";
@@ -70,51 +67,6 @@ export default function PaymentMockScreen() {
     };
   }, []);
 
-  const buildInvoiceHtml = (name: string, email: string, invNo: string, dateLabel: string) => `
-      <div dir="rtl" style="font-family: Arial; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <div style="background: #1a7a3c; color: white; padding: 20px; text-align: center;">
-          <h1>مليان للتجارة والحدائق</h1>
-          <p>Malyan For Trading and Gardens</p>
-          <p>CR No: 189013 | Salwa Road HBK Building, Doha Qatar</p>
-        </div>
-        <div style="padding: 20px; border: 1px solid #ddd;">
-          <h2>فاتورة ضريبية</h2>
-          <p><strong>رقم الفاتورة:</strong> ${invNo}</p>
-          <p><strong>التاريخ:</strong> ${dateLabel}</p>
-          <p><strong>العميل:</strong> ${name}</p>
-          <p><strong>الإيميل:</strong> ${email}</p>
-          <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
-            <tr style="background: #1a7a3c; color: white;">
-              <th style="padding: 10px; border: 1px solid #ddd;">الوصف</th>
-              <th style="padding: 10px; border: 1px solid #ddd;">الكمية</th>
-              <th style="padding: 10px; border: 1px solid #ddd;">السعر</th>
-              <th style="padding: 10px; border: 1px solid #ddd;">الإجمالي</th>
-            </tr>
-            <tr>
-              <td style="padding: 10px; border: 1px solid #ddd;">${service}</td>
-              <td style="padding: 10px; border: 1px solid #ddd;">1</td>
-              <td style="padding: 10px; border: 1px solid #ddd;">${amount} QAR</td>
-              <td style="padding: 10px; border: 1px solid #ddd;">${amount} QAR</td>
-            </tr>
-          </table>
-          <div style="text-align: left; margin-top: 20px;">
-            <p><strong>الإجمالي: ${amount} QAR</strong></p>
-            <p style="color: green;"><strong>✅ تم الدفع</strong></p>
-          </div>
-          <div style="margin-top: 20px; padding: 15px; background: #f5f5f5;">
-            <p><strong>تفاصيل البنك:</strong></p>
-            <p>Qatar National Bank (QNB)</p>
-            <p>Account: 0260-572537-001</p>
-            <p>IBAN: QA82QNBA000000000260572537001</p>
-          </div>
-        </div>
-        <div style="text-align: center; margin-top: 20px; color: #666;">
-          <p>شكراً لثقتكم بمليان للتجارة والحدائق</p>
-          <p>واتساب: wa.me/97400000000 | Info@Malyangardens.com | www.malyangardens.com</p>
-        </div>
-      </div>
-    `;
-
   const confirmPayment = async () => {
     setLoading(true);
 
@@ -162,29 +114,6 @@ export default function PaymentMockScreen() {
               .eq("id", productId);
           }
         }
-
-        const itemsForMsg: SerializedOrderItem[] = rawItems.map((row: Record<string, unknown>) => ({
-          productId: String(row.productId ?? ""),
-          name: String(row.name ?? ""),
-          quantity: Number(row.quantity ?? 1),
-          unitPrice: Number(row.unitPrice ?? 0),
-          currency: String(row.currency ?? "QAR"),
-          lineTotal: Number(row.lineTotal ?? 0),
-        }));
-
-        const invoiceText = buildOrderInvoiceMessage({
-          orderId: orderIdStr,
-          customerName: String(ord?.customer_name ?? ""),
-          customerPhone: String(ord?.customer_phone ?? ""),
-          address: ord?.address != null ? String(ord.address) : null,
-          latitude: ord?.latitude != null ? Number(ord.latitude) : null,
-          longitude: ord?.longitude != null ? Number(ord.longitude) : null,
-          items: itemsForMsg,
-          total: Number(ord?.total_amount ?? amount),
-          paymentLabel: "الدفع أونلاين",
-          statusLine: "مدفوع — جاري تجهيز التوصيل",
-        });
-        await openInvoiceWhatsAppToBusiness(invoiceText);
 
         await supabase.from("notifications").insert({
           title: "تم دفع طلب أونلاين",
@@ -270,13 +199,6 @@ export default function PaymentMockScreen() {
         body,
         type: "order",
       });
-    } catch (e) {
-      console.log(e);
-    }
-
-    try {
-      const whatsappText = `تم استلام دفعة أونلاين بقيمة ${amount} QAR مقابل ${service}.`;
-      await openInvoiceWhatsAppToBusiness(whatsappText);
     } catch (e) {
       console.log(e);
     }

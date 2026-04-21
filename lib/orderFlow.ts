@@ -65,7 +65,10 @@ export function buildOrderInvoiceMessage(input: {
   ].join("\n");
 }
 
-/** Opens WhatsApp chat with Malyan with a pre-filled invoice (customer sends to shop). */
+/**
+ * @deprecated Temporary fallback only.
+ * WhatsApp integration will be reintroduced later via an approved Business API.
+ */
 export async function openInvoiceWhatsAppToBusiness(message: string): Promise<void> {
   try {
     const digits = CONTACT.phoneTel.replace(/\D/g, "");

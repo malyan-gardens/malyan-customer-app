@@ -11,8 +11,6 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
-  buildOrderInvoiceMessage,
-  openInvoiceWhatsAppToBusiness,
   orderPrimaryLabel,
   serializeOrderItems,
 } from "../lib/orderFlow";
@@ -73,11 +71,9 @@ export default function PaymentOptionsScreen() {
     resetDraft();
   };
 
-  const insertOrderAndWhatsApp = async (input: {
+  const insertOrderAndSave = async (input: {
     payment_method: string;
     status: string;
-    paymentLabel: string;
-    statusLine: string;
   }) => {
     const { data, error: insErr } = await supabase
       .from("orders")
@@ -118,24 +114,6 @@ export default function PaymentOptionsScreen() {
       reference_type: "orders",
       read: false,
     });
-
-    const invoiceText = buildOrderInvoiceMessage({
-      orderId,
-      customerName: customerName.trim(),
-      customerPhone: effectivePhone,
-      address: safeAddress,
-      latitude,
-      longitude,
-      items: serialized,
-      total,
-      paymentLabel: input.paymentLabel,
-      statusLine: input.statusLine,
-    });
-    try {
-      await openInvoiceWhatsAppToBusiness(invoiceText);
-    } catch {
-      // Skip if WhatsApp unavailable.
-    }
     return orderId;
   };
 
@@ -143,11 +121,9 @@ export default function PaymentOptionsScreen() {
     setError(null);
     setBusy("cash");
     try {
-      await insertOrderAndWhatsApp({
+      await insertOrderAndSave({
         payment_method: "cash",
         status: "pending_cash",
-        paymentLabel: "الدفع كاش عند الاستلام",
-        statusLine: "بانتظار التحصيل — سيؤكد السائق الاستلام ثم التسليم",
       });
       finalizeCart();
       router.replace("/order-success");
