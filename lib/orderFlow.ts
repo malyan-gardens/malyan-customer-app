@@ -67,12 +67,11 @@ export function buildOrderInvoiceMessage(input: {
 
 /** Opens WhatsApp chat with Malyan with a pre-filled invoice (customer sends to shop). */
 export async function openInvoiceWhatsAppToBusiness(message: string): Promise<void> {
-  const digits = CONTACT.phoneTel.replace(/\D/g, "");
-  const url = `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
-  const can = await Linking.canOpenURL(url).catch(() => false);
-  if (can) {
+  try {
+    const digits = CONTACT.phoneTel.replace(/\D/g, "");
+    const url = `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
     await Linking.openURL(url);
-    return;
+  } catch {
+    // WhatsApp not available — silently skip.
   }
-  await Linking.openURL(url);
 }

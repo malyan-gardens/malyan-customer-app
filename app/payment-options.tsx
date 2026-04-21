@@ -131,7 +131,11 @@ export default function PaymentOptionsScreen() {
       paymentLabel: input.paymentLabel,
       statusLine: input.statusLine,
     });
-    await openInvoiceWhatsAppToBusiness(invoiceText);
+    try {
+      await openInvoiceWhatsAppToBusiness(invoiceText);
+    } catch {
+      // Skip if WhatsApp unavailable.
+    }
     return orderId;
   };
 
