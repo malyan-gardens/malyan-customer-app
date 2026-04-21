@@ -124,6 +124,25 @@ export default function PaymentOptionsScreen() {
         payment_method: "cash",
         status: "pending_cash",
       });
+      try {
+        await fetch("https://malyan-dashboard.vercel.app/api/send-invoice-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            orderId,
+            customerName: customerName.trim(),
+            customerEmail: "",
+            items: serialized,
+            total,
+            paymentMethod: "الدفع كاش",
+            address: safeAddress,
+            discountAmount: 0,
+            discountLabel: "",
+          }),
+        });
+      } catch {
+        // silently skip
+      }
       router.replace({
         pathname: "/order-success",
         params: { orderId, total: String(total) },

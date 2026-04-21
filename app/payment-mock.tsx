@@ -94,6 +94,26 @@ export default function PaymentMockScreen() {
         if (fetchErr) throw fetchErr;
 
         const rawItems = Array.isArray(ord?.items) ? ord.items : [];
+        try {
+          await fetch("https://malyan-dashboard.vercel.app/api/send-invoice-email", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              orderId: orderIdStr,
+              customerName: ord?.customer_name ?? "",
+              customerEmail: "",
+              items: rawItems,
+              total: Number(ord?.total_amount ?? amount),
+              paymentMethod: "الدفع أونلاين",
+              address: ord?.address ?? "",
+              discountAmount: 0,
+              discountLabel: "",
+            }),
+          });
+        } catch {
+          // silently skip if email fails
+        }
+
         for (const row of rawItems as Record<string, unknown>[]) {
           const productId = String(row.productId ?? "");
           if (!productId) continue;
@@ -125,7 +145,13 @@ export default function PaymentMockScreen() {
         });
 
         setLoading(false);
-        router.replace("/order-success");
+        router.replace({
+          pathname: "/order-success",
+          params: {
+            orderId: orderIdStr,
+            total: String(Number(ord?.total_amount ?? amount)),
+          },
+        });
         useCartStore.getState().clear();
         useCheckoutDraftStore.getState().reset();
       } catch (e) {
