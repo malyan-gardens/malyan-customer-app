@@ -141,6 +141,17 @@ export default function PlantsScreen() {
                         <PlantCard
                           item={item}
                           onOpen={() => router.push(`/product/${item.id}`)}
+                          onOrder={() =>
+                            router.push({
+                              pathname: "/checkout",
+                              params: {
+                                productId: item.id,
+                                productName: item.name_ar ?? "",
+                                productPrice: String(item.selling_price ?? 0),
+                                productCurrency: item.currency ?? "QAR",
+                              },
+                            })
+                          }
                           onAdd={() =>
                             addItem({
                               productId: item.id,
@@ -261,14 +272,17 @@ export default function PlantsScreen() {
 function PlantCard({
   item,
   onOpen,
+  onOrder,
   onAdd,
 }: {
   item: InventoryRow;
   onOpen: () => void;
+  onOrder: () => void;
   onAdd: () => void;
 }) {
   const title = item.name_ar ?? "";
   const price = (item.selling_price ?? 0).toFixed(2);
+  const isOutOfStock = (item.quantity ?? 0) === 0;
   return (
     <View style={styles.card}>
       <Pressable
@@ -290,6 +304,11 @@ function PlantCard({
               <Ionicons name="leaf" size={36} color={colors.brand} />
             </LinearGradient>
           )}
+          {isOutOfStock ? (
+            <View style={styles.stockBadge}>
+              <Text style={styles.stockBadgeText}>نفدت الكمية</Text>
+            </View>
+          ) : null}
         </View>
         <View style={styles.cardBody}>
           <Text style={styles.cardTitle} numberOfLines={2}>
@@ -300,8 +319,19 @@ function PlantCard({
           </Text>
         </View>
       </Pressable>
-      <Pressable onPress={onAdd} style={styles.cardAdd}>
-        <Text style={styles.cardAddText}>أضف للسلة</Text>
+      <Pressable
+        onPress={onAdd}
+        style={[styles.cardAdd, isOutOfStock && styles.cardBtnDisabled]}
+        disabled={isOutOfStock}
+      >
+        <Text style={styles.cardAddText}>{isOutOfStock ? "غير متاح" : "أضف للسلة"}</Text>
+      </Pressable>
+      <Pressable
+        onPress={onOrder}
+        style={[styles.cardOrder, isOutOfStock && styles.cardBtnDisabled]}
+        disabled={isOutOfStock}
+      >
+        <Text style={styles.cardOrderText}>{isOutOfStock ? "غير متاح" : "اطلب الآن"}</Text>
       </Pressable>
     </View>
   );
@@ -373,7 +403,17 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     ...shadows.card,
   },
-  cardImg: { aspectRatio: 1, backgroundColor: colors.bgElevated },
+  cardImg: { aspectRatio: 1, backgroundColor: colors.bgElevated, position: "relative" },
+  stockBadge: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    backgroundColor: colors.red500,
+    borderRadius: radii.sm,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  stockBadgeText: { color: colors.white, fontWeight: "800", fontSize: 11, textAlign: "right" },
   cardImgInner: { width: "100%", height: "100%", alignItems: "center", justifyContent: "center" },
   cardBody: { padding: 12 },
   cardTitle: {
@@ -391,13 +431,23 @@ const styles = StyleSheet.create({
   },
   cardAdd: {
     marginHorizontal: 12,
-    marginBottom: 12,
+    marginBottom: 8,
     backgroundColor: colors.brand,
     paddingVertical: 10,
     borderRadius: radii.sm,
     alignItems: "center",
   },
   cardAddText: { color: colors.white, fontWeight: "800", fontSize: 13 },
+  cardOrder: {
+    marginHorizontal: 12,
+    marginBottom: 12,
+    backgroundColor: colors.gold,
+    paddingVertical: 10,
+    borderRadius: radii.sm,
+    alignItems: "center",
+  },
+  cardOrderText: { color: colors.bg, fontWeight: "800", fontSize: 13 },
+  cardBtnDisabled: { opacity: 0.5 },
   errorBox: { padding: spacing.lg, alignItems: "center" },
   errorText: { color: colors.textSecondary, textAlign: "center" },
   retry: {

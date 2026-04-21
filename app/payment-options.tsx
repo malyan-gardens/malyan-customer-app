@@ -40,8 +40,6 @@ export default function PaymentOptionsScreen() {
 
   const ready =
     orderLines.length > 0 &&
-    latitude != null &&
-    longitude != null &&
     Boolean(address?.trim());
 
   useEffect(() => {
@@ -91,6 +89,23 @@ export default function PaymentOptionsScreen() {
 
     if (insErr) throw insErr;
     const orderId = data?.id as string;
+
+    // Decrement inventory quantity for each ordered item.
+    for (const line of orderLines) {
+      const { data: inv } = await supabase
+        .from("inventory")
+        .select("quantity")
+        .eq("id", line.productId)
+        .single();
+
+      if (inv && Number(inv.quantity ?? 0) > 0) {
+        const newQty = Math.max(0, Number(inv.quantity ?? 0) - line.quantity);
+        await supabase
+          .from("inventory")
+          .update({ quantity: newQty })
+          .eq("id", line.productId);
+      }
+    }
 
     await supabase.from("notifications").insert({
       title: "طلب جديد",
@@ -153,6 +168,23 @@ export default function PaymentOptionsScreen() {
 
       if (insErr) throw insErr;
       const orderId = data?.id as string;
+
+      // Decrement inventory quantity for each ordered item.
+      for (const line of orderLines) {
+        const { data: inv } = await supabase
+          .from("inventory")
+          .select("quantity")
+          .eq("id", line.productId)
+          .single();
+
+        if (inv && Number(inv.quantity ?? 0) > 0) {
+          const newQty = Math.max(0, Number(inv.quantity ?? 0) - line.quantity);
+          await supabase
+            .from("inventory")
+            .update({ quantity: newQty })
+            .eq("id", line.productId);
+        }
+      }
 
       await supabase.from("notifications").insert({
         title: "طلب — بانتظار الدفع",

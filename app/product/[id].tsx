@@ -91,12 +91,14 @@ export default function ProductDetailScreen() {
   const priceLabel = product
     ? `${(product.selling_price ?? 0).toFixed(2)} ${product.currency ?? "QAR"}`
     : "";
+  const isOutOfStock = (product?.quantity ?? 0) === 0;
 
   const decQty = () => setQty((q) => Math.max(1, q - 1));
   const incQty = () => setQty((q) => Math.min(maxAllowed, q + 1));
 
   const handleAddToCart = () => {
     if (!product) return;
+    if (isOutOfStock) return;
     if (isGuest || !session) {
       setGuestModalOpen(true);
       return;
@@ -117,6 +119,7 @@ export default function ProductDetailScreen() {
 
   const handleOrderNow = () => {
     if (!product) return;
+    if (isOutOfStock) return;
     if (isGuest || !session) {
       setGuestModalOpen(true);
       return;
@@ -199,6 +202,14 @@ export default function ProductDetailScreen() {
 
           <Text style={styles.name}>{title}</Text>
           <Text style={styles.price}>{priceLabel}</Text>
+          {isOutOfStock ? (
+            <>
+              <View style={styles.stockBadge}>
+                <Text style={styles.stockBadgeText}>نفدت الكمية</Text>
+              </View>
+              <Text style={styles.unavailableText}>هذا المنتج غير متاح حالياً</Text>
+            </>
+          ) : null}
 
           {product.description ? (
             <Text style={styles.desc}>{product.description}</Text>
@@ -230,16 +241,26 @@ export default function ProductDetailScreen() {
 
           <Pressable
             onPress={handleAddToCart}
-            style={({ pressed }) => [styles.addBtn, pressed && { opacity: 0.92 }]}
+            disabled={isOutOfStock}
+            style={({ pressed }) => [
+              styles.addBtn,
+              pressed && { opacity: 0.92 },
+              isOutOfStock && styles.btnDisabled,
+            ]}
           >
-            <Text style={styles.addBtnText}>أضف للسلة</Text>
+            <Text style={styles.addBtnText}>{isOutOfStock ? "غير متاح" : "أضف للسلة"}</Text>
           </Pressable>
 
           <Pressable
             onPress={handleOrderNow}
-            style={({ pressed }) => [styles.orderBtn, pressed && { opacity: 0.92 }]}
+            disabled={isOutOfStock}
+            style={({ pressed }) => [
+              styles.orderBtn,
+              pressed && { opacity: 0.92 },
+              isOutOfStock && styles.btnDisabled,
+            ]}
           >
-            <Text style={styles.orderBtnText}>اطلب الآن</Text>
+            <Text style={styles.orderBtnText}>{isOutOfStock ? "غير متاح" : "اطلب الآن"}</Text>
           </Pressable>
 
           {related.length > 0 ? (
@@ -368,6 +389,28 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
   },
+  stockBadge: {
+    alignSelf: "flex-end",
+    marginTop: spacing.sm,
+    marginHorizontal: spacing.md,
+    backgroundColor: colors.red500,
+    borderRadius: radii.sm,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  stockBadgeText: {
+    color: colors.white,
+    fontWeight: "800",
+    fontSize: 12,
+    textAlign: "right",
+  },
+  unavailableText: {
+    color: colors.red400,
+    fontSize: 14,
+    textAlign: "right",
+    paddingHorizontal: spacing.md,
+    marginTop: spacing.sm,
+  },
   desc: {
     color: colors.textSecondary,
     fontSize: 14,
@@ -452,6 +495,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
   },
+  btnDisabled: { opacity: 0.5 },
   relatedSection: { marginTop: spacing.xl },
   relatedTitle: {
     color: colors.white,

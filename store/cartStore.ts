@@ -40,6 +40,7 @@ export const useCartStore = create<CartState>()(
       items: [],
       cartCount: () => get().items.reduce((sum, i) => sum + i.quantity, 0),
       addItem: (line) => {
+        if (line.maxQuantity === 0) return;
         const qty = line.quantity ?? 1;
         const existing = get().items.find((i) => i.productId === line.productId);
         const maxQ = line.maxQuantity;

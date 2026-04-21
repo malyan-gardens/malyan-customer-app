@@ -168,6 +168,7 @@ export default function HomeScreen() {
       const title = item.name_ar ?? "";
       const price = (item.selling_price ?? 0).toFixed(2);
       const maxQ = item.quantity;
+      const isOutOfStock = (item.quantity ?? 0) === 0;
       return (
         <View style={[styles.gridCell, { width: COL_WIDTH }]}>
           <View style={styles.pCard}>
@@ -190,6 +191,11 @@ export default function HomeScreen() {
                     <Ionicons name="leaf" size={40} color={colors.brand} />
                   </LinearGradient>
                 )}
+                {isOutOfStock ? (
+                  <View style={styles.stockBadge}>
+                    <Text style={styles.stockBadgeText}>نفدت الكمية</Text>
+                  </View>
+                ) : null}
               </View>
               <View style={styles.pBody}>
                 <Text style={styles.pTitle} numberOfLines={2}>
@@ -202,6 +208,7 @@ export default function HomeScreen() {
             </Pressable>
             <Pressable
               onPress={() => {
+                if (isOutOfStock) return;
                 if (isGuest) {
                   setShowGuestModal(true);
                   return;
@@ -218,13 +225,19 @@ export default function HomeScreen() {
                   category: item.category ?? null,
                 });
               }}
-              style={({ pressed }) => [styles.addMini, pressed && { opacity: 0.9 }]}
+              disabled={isOutOfStock}
+              style={({ pressed }) => [
+                styles.addMini,
+                (pressed || isOutOfStock) && { opacity: 0.9 },
+                isOutOfStock && styles.btnDisabled,
+              ]}
             >
               <Ionicons name="add" size={18} color="#fff" />
-              <Text style={styles.addMiniText}>أضف للسلة</Text>
+              <Text style={styles.addMiniText}>{isOutOfStock ? "غير متاح" : "أضف للسلة"}</Text>
             </Pressable>
             <Pressable
               onPress={() => {
+                if (isOutOfStock) return;
                 if (isGuest) {
                   setShowGuestModal(true);
                   return;
@@ -239,10 +252,15 @@ export default function HomeScreen() {
                   },
                 });
               }}
-              style={({ pressed }) => [styles.buyNowBtn, pressed && { opacity: 0.9 }]}
+              disabled={isOutOfStock}
+              style={({ pressed }) => [
+                styles.buyNowBtn,
+                (pressed || isOutOfStock) && { opacity: 0.9 },
+                isOutOfStock && styles.btnDisabled,
+              ]}
             >
               <Ionicons name="flash" size={16} color={colors.bg} />
-              <Text style={styles.buyNowText}>اطلب الآن</Text>
+              <Text style={styles.buyNowText}>{isOutOfStock ? "غير متاح" : "اطلب الآن"}</Text>
             </Pressable>
           </View>
         </View>
@@ -780,6 +798,22 @@ const styles = StyleSheet.create({
     height: PRODUCT_IMAGE_H,
     width: "100%",
     backgroundColor: colors.bgElevated,
+    position: "relative",
+  },
+  stockBadge: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    backgroundColor: colors.red500,
+    borderRadius: radii.sm,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  stockBadgeText: {
+    color: colors.white,
+    fontSize: 11,
+    fontWeight: "800",
+    textAlign: "right",
   },
   pImage: { width: "100%", height: "100%" },
   pImagePlaceholder: {
@@ -835,6 +869,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.sm,
   },
   buyNowText: { color: colors.bg, fontWeight: "800", fontSize: 14 },
+  btnDisabled: { opacity: 0.5 },
   errorBox: {
     marginHorizontal: spacing.md,
     padding: spacing.lg,
