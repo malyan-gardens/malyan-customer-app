@@ -14,7 +14,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuthStore } from "../lib/authStore";
 import { supabase } from "../lib/supabase";
-import { cartTotal, useCartStore, type CartLine } from "../store/cartStore";
+import { useCartStore, type CartLine } from "../store/cartStore";
 import { useCheckoutDraftStore } from "../store/checkoutDraftStore";
 import { colors, radii, shadows, spacing } from "../lib/theme";
 import {
@@ -57,17 +57,13 @@ export default function CheckoutScreen() {
   }, [params.productId, params.productName, params.productPrice, params.productCurrency]);
 
   const orderItems = directProduct ? [directProduct] : items;
-  const originalTotal = cartTotal(orderItems);
+  const originalTotal = useMemo(
+    () => orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0),
+    [orderItems]
+  );
   const discountAmount = Math.max(0, Number(params.discountAmount ?? 0) || 0);
-  const finalTotalParam =
-    params.finalTotal != null && params.finalTotal !== ""
-      ? Number(params.finalTotal)
-      : NaN;
-  const summaryFinal = !Number.isNaN(finalTotalParam)
-    ? finalTotalParam
-    : discountAmount > 0
-      ? Math.max(0, originalTotal - discountAmount)
-      : originalTotal;
+  const summaryFinal =
+    discountAmount > 0 ? Math.max(0, originalTotal - discountAmount) : originalTotal;
   const discountLabel = params.discountLabel ? String(params.discountLabel) : "";
 
   const [customerName, setCustomerName] = useState("");

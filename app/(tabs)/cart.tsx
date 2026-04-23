@@ -21,7 +21,7 @@ import {
   type CartItemForDiscount,
   type Promotion,
 } from "../../lib/promotions";
-import { cartTotal, useCartStore, type CartLine } from "../../store/cartStore";
+import { useCartStore, type CartLine } from "../../store/cartStore";
 
 export default function CartScreen() {
   const router = useRouter();
@@ -29,7 +29,10 @@ export default function CartScreen() {
   const items = useCartStore((s) => s.items);
   const setQuantity = useCartStore((s) => s.setQuantity);
   const removeItem = useCartStore((s) => s.removeItem);
-  const total = cartTotal(items);
+  const total = useMemo(
+    () => items.reduce((sum, item) => sum + item.price * item.quantity, 0),
+    [items]
+  );
   const [guestOpen, setGuestOpen] = useState(false);
   const [promotions, setPromotions] = useState<Promotion[]>([]);
 
@@ -58,6 +61,7 @@ export default function CartScreen() {
     () => calculateBestDiscount(discountInput, promotions),
     [discountInput, promotions]
   );
+  const finalTotal = Math.max(0, total - discountResult.discountAmount);
 
   const onCheckout = () => {
     if (!session) {
@@ -67,7 +71,7 @@ export default function CartScreen() {
     router.push({
       pathname: "/checkout",
       params: {
-        finalTotal: String(discountResult.finalTotal),
+        finalTotal: String(finalTotal),
         appliedPromotionId: discountResult.appliedPromotion?.id ?? "",
         discountAmount: String(discountResult.discountAmount),
         discountLabel: discountResult.discountLabel,
@@ -140,7 +144,7 @@ export default function CartScreen() {
               </Text>
               <Text style={styles.afterDiscountLine}>
                 بعد الخصم:{" "}
-                <Text style={styles.totalGoldLarge}>{discountResult.finalTotal.toFixed(2)} QAR</Text>
+                <Text style={styles.totalGoldLarge}>{finalTotal.toFixed(2)} QAR</Text>
               </Text>
             </>
           ) : (
