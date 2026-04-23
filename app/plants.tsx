@@ -85,7 +85,7 @@ export default function PlantsScreen() {
     setPriceMax("");
   };
 
-  const columns = width >= 900 ? 3 : 2;
+  const columns = width >= 768 ? 3 : 2;
 
   if (loading) {
     return (
@@ -290,7 +290,7 @@ function PlantCard({
   const price = (item.selling_price ?? 0).toFixed(2);
   const isOutOfStock = (item.quantity ?? 0) === 0;
   const screenWidth = Dimensions.get("window").width;
-  const columns = width >= 900 ? 3 : 2;
+  const columns = width >= 768 ? 3 : 2;
   const cardWidth = (screenWidth - spacing.md * 2 - 12 * (columns - 1)) / columns;
   const imageHeight = Math.max(110, Math.floor(cardWidth * 0.72));
   const images = useMemo(() => {

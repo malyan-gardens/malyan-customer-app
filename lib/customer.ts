@@ -23,30 +23,23 @@ export function isValidQatarPhone(input: string | null | undefined): boolean {
 }
 
 export type CustomerOrderStatus =
+  | "new"
   | "pending"
-  | "pending_cash"
-  | "pending_payment"
-  | "paid"
-  | "processing"
+  | "in_delivery"
   | "delivered"
   | "cancelled"
   | "refund_requested";
 
 export function orderStatusLabelAr(status: string | null | undefined): string {
   const value = String(status ?? "").trim().toLowerCase();
-  if (value === "processing") return "قيد التسليم";
+  if (value === "in_delivery") return "قيد التسليم";
   if (value === "delivered") return "تم التسليم";
   if (value === "cancelled") return "ملغي";
-  if (value === "refund_requested") return "طلب استرجاع";
+  if (value === "refund_requested") return "طلب استرجاع قيد المراجعة";
   return "طلب جديد";
 }
 
 export function canCancelAsNewOrder(status: string | null | undefined): boolean {
   const value = String(status ?? "").trim().toLowerCase();
-  return (
-    value === "pending" ||
-    value === "pending_cash" ||
-    value === "pending_payment" ||
-    value === "paid"
-  );
+  return value === "new" || value === "pending";
 }

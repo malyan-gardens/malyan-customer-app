@@ -186,7 +186,10 @@ export default function PaymentMockScreen() {
         }));
 
         try {
+        const fallbackInvoiceNumber = `MAL-${today.split("-")[0]}-${orderIdStr.replace(/-/g, "").slice(-4).toUpperCase()}`;
           await supabase.from("invoices").insert({
+          order_id: orderIdStr,
+          invoice_number: fallbackInvoiceNumber,
             customer_name: String(ord?.customer_name ?? ""),
             customer_email: customerEmailForInvoice,
             customer_phone: String(ord?.customer_phone ?? ""),

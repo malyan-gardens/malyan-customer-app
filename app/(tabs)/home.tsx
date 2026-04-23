@@ -131,7 +131,7 @@ export default function HomeScreen() {
   const [search, setSearch] = useState("");
   const [heroIndex, setHeroIndex] = useState(0);
   const heroRef = useRef<ScrollView>(null);
-  const columns = screenWidth >= 900 ? 3 : 2;
+  const columns = screenWidth >= 768 ? 3 : 2;
   const colWidth =
     (screenWidth - GRID_H_PAD * 2 - GRID_GAP * (columns - 1)) / columns;
   const heroWidth = screenWidth;

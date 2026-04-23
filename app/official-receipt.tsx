@@ -23,12 +23,19 @@ type ReceiptItem = {
   currency?: string;
 };
 
+function fallbackInvoiceNumber(orderId: string): string {
+  const year = new Date().getFullYear();
+  const suffix = orderId.replace(/-/g, "").slice(-4).toUpperCase() || "0000";
+  return `MAL-${year}-${suffix}`;
+}
+
 export default function OfficialReceiptScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ orderId?: string }>();
   const orderId = String(params.orderId ?? "").trim();
   const [loading, setLoading] = useState(Boolean(orderId));
   const [order, setOrder] = useState<Record<string, unknown> | null>(null);
+  const [invoiceNumber, setInvoiceNumber] = useState("");
 
   useEffect(() => {
     if (!orderId) {
@@ -40,6 +47,34 @@ export default function OfficialReceiptScreen() {
       const { data } = await supabase.from("orders").select("*").eq("id", orderId).single();
       if (!mounted) return;
       setOrder((data as Record<string, unknown> | null) ?? null);
+      let invoiceNo = "";
+      try {
+        const { data: byOrder } = await supabase
+          .from("invoices")
+          .select("invoice_number")
+          .eq("order_id", orderId)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        invoiceNo = String((byOrder as { invoice_number?: string } | null)?.invoice_number ?? "");
+      } catch {
+        invoiceNo = "";
+      }
+      if (!invoiceNo) {
+        try {
+          const { data: byNotes } = await supabase
+            .from("invoices")
+            .select("invoice_number,notes")
+            .ilike("notes", `%${orderId}%`)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          invoiceNo = String((byNotes as { invoice_number?: string } | null)?.invoice_number ?? "");
+        } catch {
+          invoiceNo = "";
+        }
+      }
+      setInvoiceNumber(invoiceNo || fallbackInvoiceNumber(orderId));
       setLoading(false);
     })();
     return () => {
@@ -72,6 +107,7 @@ export default function OfficialReceiptScreen() {
       <SafeAreaView style={styles.screen} edges={["bottom"]}>
         <ScrollView contentContainerStyle={styles.pad} showsVerticalScrollIndicator={false}>
           <View style={styles.headerCard}>
+            <Ionicons name="leaf" size={30} color={colors.gold} />
             <Text style={styles.company}>Malyan Gardens</Text>
             <Text style={styles.companySub}>الإيصال الرسمي للدفع</Text>
             <Text style={styles.companySub}>{CONTACT.websiteDisplay}</Text>
@@ -82,6 +118,7 @@ export default function OfficialReceiptScreen() {
               <ActivityIndicator color={colors.gold} />
             ) : (
               <>
+                <Text style={styles.line}>رقم الفاتورة: {invoiceNumber || fallbackInvoiceNumber(orderId)}</Text>
                 <Text style={styles.line}>رقم الطلب: {orderId ? orderId.slice(0, 8) : "—"}</Text>
                 <Text style={styles.line}>التاريخ: {createdAtLabel}</Text>
                 <Text style={styles.line}>طريقة الدفع: {paymentMethodLabel}</Text>
@@ -114,7 +151,7 @@ export default function OfficialReceiptScreen() {
             }
           >
             <Ionicons name="download-outline" size={20} color={colors.white} />
-            <Text style={styles.secondaryText}>تنزيل PDF (قريباً)</Text>
+            <Text style={styles.secondaryText}>تحميل PDF (قريباً)</Text>
           </Pressable>
 
           <Pressable style={styles.primaryBtn} onPress={() => router.replace("/(tabs)/home")}>

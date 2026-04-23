@@ -39,7 +39,7 @@ function formatQatarPhone(raw: string) {
   let digits = raw.replace(/\D/g, "");
   if (digits.startsWith("974")) digits = digits.slice(3);
   digits = digits.replace(/^0+/, "");
-  const localDigits = digits.slice(0, 9);
+  const localDigits = digits.slice(0, 8);
   return `+974${localDigits}`;
 }
 
@@ -93,8 +93,8 @@ export default function PhoneInputScreen() {
   const sendOtp = async () => {
     setError(null);
     const fullPhoneNumber = formatQatarPhone(phoneLocal);
-    if (!/^\+974\d{8,9}$/.test(fullPhoneNumber)) {
-      setError("يرجى إدخال رقم صحيح بصيغة +974XXXXXXXXX");
+    if (!/^\+974\d{8}$/.test(fullPhoneNumber)) {
+      setError("يرجى إدخال رقم صحيح بصيغة +974XXXXXXXX");
       return;
     }
 
@@ -171,10 +171,11 @@ export default function PhoneInputScreen() {
               <Text style={styles.label}>رقم الجوال</Text>
               <TextInput
                 value={phoneLocal}
-                onChangeText={(t) => setPhoneLocal(t.replace(/[^\d]/g, "").slice(0, 15))}
+                onChangeText={(t) => setPhoneLocal(t.replace(/[^\d]/g, "").slice(0, 8))}
                 placeholder="XXXXXXXX"
                 placeholderTextColor={colors.textMuted}
                 keyboardType="phone-pad"
+                maxLength={8}
                 style={styles.input}
               />
 

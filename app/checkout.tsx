@@ -72,6 +72,7 @@ export default function CheckoutScreen() {
 
   const [customerName, setCustomerName] = useState("");
   const [customerPhoneDigits, setCustomerPhoneDigits] = useState("");
+  const [phoneLocked, setPhoneLocked] = useState(false);
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -86,10 +87,6 @@ export default function CheckoutScreen() {
         if (!user || cancelled) return;
         const fullName = String(user.user_metadata?.full_name ?? "").trim();
         const email = String(user.email ?? "").trim();
-        const authPhone = normalizeQatarPhone(user.phone);
-        const authMetaPhone = normalizeQatarPhone(
-          String(user.user_metadata?.phone ?? "")
-        );
         let profilePhone = "";
         try {
           const { data: profile } = await supabase
@@ -103,6 +100,8 @@ export default function CheckoutScreen() {
         } catch {
           profilePhone = "";
         }
+        const authPhone = normalizeQatarPhone(user.phone);
+        const authMetaPhone = normalizeQatarPhone(String(user.user_metadata?.phone ?? ""));
         const resolvedPhone = profilePhone || authPhone || authMetaPhone;
         if (fullName) {
           setCustomerName(fullName);
@@ -112,6 +111,7 @@ export default function CheckoutScreen() {
         if (resolvedPhone) {
           setCustomerPhoneDigits(extractQatarPhoneDigits(resolvedPhone));
         }
+        setPhoneLocked(Boolean(profilePhone));
       } catch {
         // Keep manual name entry if user profile fetch fails.
       }
@@ -242,14 +242,20 @@ export default function CheckoutScreen() {
             <Text style={styles.phonePrefix}>{QATAR_COUNTRY_CODE}</Text>
             <TextInput
               value={customerPhoneDigits}
-              onChangeText={(v) => setCustomerPhoneDigits(v.replace(/\D/g, "").slice(0, 8))}
+              onChangeText={(v) =>
+                !phoneLocked && setCustomerPhoneDigits(v.replace(/\D/g, "").slice(0, 8))
+              }
               placeholder="XXXXXXXX"
               placeholderTextColor={colors.textMuted}
               keyboardType="number-pad"
               style={styles.phoneInput}
               maxLength={8}
+              editable={!phoneLocked}
             />
           </View>
+          {phoneLocked ? (
+            <Text style={styles.lockedHint}>تم تعبئة الرقم من ملفك الشخصي</Text>
+          ) : null}
 
           <Text style={styles.label}>ملاحظات (اختياري)</Text>
           <TextInput
@@ -403,6 +409,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: "right",
     paddingVertical: 12,
+  },
+  lockedHint: {
+    color: colors.textMuted,
+    textAlign: "right",
+    marginTop: -8,
+    marginBottom: 12,
+    fontSize: 12,
   },
   inputMulti: { minHeight: 88, textAlignVertical: "top" },
   error: {

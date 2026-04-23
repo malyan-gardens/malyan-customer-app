@@ -56,8 +56,19 @@ export default function MyOrdersScreen() {
         setLoading(false);
         return;
       }
-
-      const profilePhone = normalizeQatarPhone(String(user.user_metadata?.phone ?? ""));
+      let profilePhone = "";
+      try {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("phone")
+          .eq("id", user.id)
+          .maybeSingle();
+        profilePhone = normalizeQatarPhone(
+          String((profile as { phone?: string } | null)?.phone ?? "")
+        );
+      } catch {
+        profilePhone = "";
+      }
       const authPhone = normalizeQatarPhone(user.phone);
       const variants = buildPhoneVariants(profilePhone || authPhone);
       setPhoneVariants(variants);
@@ -97,6 +108,15 @@ export default function MyOrdersScreen() {
           void (async () => {
             const isOnline = String(order.payment_method ?? "") === "online";
             const nextStatus = isOnline ? "refund_requested" : "cancelled";
+            if (isOnline) {
+              const { error: refundErr } = await supabase.from("refund_requests").insert({
+                order_id: order.id,
+              });
+              if (refundErr) {
+                Alert.alert("خطأ", `تعذر إنشاء طلب الاسترجاع: ${refundErr.message}`);
+                return;
+              }
+            }
             const { error: upErr } = await supabase
               .from("orders")
               .update({ status: nextStatus })

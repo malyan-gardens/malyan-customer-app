@@ -25,10 +25,8 @@ type Appointment = {
 
 function appointmentStatusAr(status: string): string {
   const value = status.trim().toLowerCase();
-  if (value === "completed" || value === "delivered") return "تم التسليم";
-  if (value === "in_progress" || value === "confirmed" || value === "processing") {
-    return "قيد التسليم";
-  }
+  if (value === "done") return "منفذ";
+  if (value === "in_progress") return "قيد التنفيذ";
   if (value === "cancelled") return "ملغي";
   return "طلب جديد";
 }
@@ -57,27 +55,71 @@ export default function MyAppointmentsScreen() {
         setLoading(false);
         return;
       }
-      const profilePhone = normalizeQatarPhone(String(user.user_metadata?.phone ?? ""));
+      let profilePhone = "";
+      try {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("phone")
+          .eq("id", user.id)
+          .maybeSingle();
+        profilePhone = normalizeQatarPhone(
+          String((profile as { phone?: string } | null)?.phone ?? "")
+        );
+      } catch {
+        profilePhone = "";
+      }
       const authPhone = normalizeQatarPhone(user.phone);
       const variants = buildPhoneVariants(profilePhone || authPhone);
-      if (variants.length === 0) {
-        setAppointments([]);
-        setLoading(false);
-        return;
+      let maintenanceRes;
+      let designRes;
+      try {
+        const [maintenanceByPhone, maintenanceById, designByPhone, designById] = await Promise.all(
+          [
+            supabase
+              .from("maintenance_requests")
+              .select("id,service_type,scheduled_date,status,created_at")
+              .in("customer_phone", variants.length > 0 ? variants : [""]),
+            supabase
+              .from("maintenance_requests")
+              .select("id,service_type,scheduled_date,status,created_at")
+              .eq("customer_id", user.id),
+            supabase
+              .from("design_requests")
+              .select("id,project_type,created_at,status")
+              .in("customer_phone", variants.length > 0 ? variants : [""]),
+            supabase
+              .from("design_requests")
+              .select("id,project_type,created_at,status")
+              .eq("customer_id", user.id),
+          ]
+        );
+        if (maintenanceByPhone.error || maintenanceById.error || designByPhone.error || designById.error) {
+          throw new Error("query_by_customer_id_failed");
+        }
+        const mergedMaintenance = [
+          ...((maintenanceByPhone.data ?? []) as Record<string, unknown>[]),
+          ...((maintenanceById.data ?? []) as Record<string, unknown>[]),
+        ];
+        const mergedDesign = [
+          ...((designByPhone.data ?? []) as Record<string, unknown>[]),
+          ...((designById.data ?? []) as Record<string, unknown>[]),
+        ];
+        maintenanceRes = { data: mergedMaintenance, error: null };
+        designRes = { data: mergedDesign, error: null };
+      } catch {
+        [maintenanceRes, designRes] = await Promise.all([
+          supabase
+            .from("maintenance_requests")
+            .select("id,service_type,scheduled_date,status,created_at")
+            .in("customer_phone", variants.length > 0 ? variants : [""])
+            .order("created_at", { ascending: false }),
+          supabase
+            .from("design_requests")
+            .select("id,project_type,created_at,status")
+            .in("customer_phone", variants.length > 0 ? variants : [""])
+            .order("created_at", { ascending: false }),
+        ]);
       }
-
-      const [maintenanceRes, designRes] = await Promise.all([
-        supabase
-          .from("maintenance_requests")
-          .select("id,service_type,scheduled_date,status,created_at")
-          .in("customer_phone", variants)
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("design_requests")
-          .select("id,project_type,created_at,status")
-          .in("customer_phone", variants)
-          .order("created_at", { ascending: false }),
-      ]);
 
       if (maintenanceRes.error) throw maintenanceRes.error;
       if (designRes.error) throw designRes.error;
@@ -98,7 +140,11 @@ export default function MyAppointmentsScreen() {
         status: String(row.status ?? "new"),
       }));
 
-      const merged = [...maintenanceRows, ...designRows].sort((a, b) =>
+      const merged = [...maintenanceRows, ...designRows]
+        .filter(
+          (row, idx, arr) => arr.findIndex((x) => x.id === row.id && x.serviceType === row.serviceType) === idx
+        )
+        .sort((a, b) =>
         b.dateText.localeCompare(a.dateText)
       );
       setAppointments(merged);

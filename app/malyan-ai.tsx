@@ -418,14 +418,19 @@ export default function MalyanAiScreen() {
         }));
       }
 
-      const msg = e instanceof Error ? e.message : "تعذر إكمال الطلب.";
+      const rawMsg = e instanceof Error ? e.message : "تعذر إكمال الطلب.";
+      const msg = rawMsg.includes("DAILY_")
+        ? rawMsg
+        : "عذراً، مليان الذكي غير متاح حالياً";
       setError(msg);
 
       // Friendly handling for daily block errors.
-      if (msg.includes("DAILY_MESSAGES_EXCEEDED")) {
+      if (rawMsg.includes("DAILY_MESSAGES_EXCEEDED")) {
         Alert.alert("وصلت للحد اليومي", "تبقى لك 0 رسالة اليوم. جرّب لاحقاً.");
-      } else if (msg.includes("DAILY_BUDGET_EXCEEDED")) {
+      } else if (rawMsg.includes("DAILY_BUDGET_EXCEEDED")) {
         Alert.alert("وصلت للميزانية", "تعذر إكمال الطلب اليوم. جرّب لاحقاً.");
+      } else {
+        Alert.alert("تنبيه", "عذراً، مليان الذكي غير متاح حالياً");
       }
     } finally {
       setTyping(false);

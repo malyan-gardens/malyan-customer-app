@@ -196,7 +196,7 @@ export default function PaymentOptionsScreen() {
     try {
       const orderId = await insertOrderAndSave({
         payment_method: "cash",
-        status: "pending_cash",
+        status: "pending",
       });
       try {
         let customerEmail = "";
@@ -253,7 +253,7 @@ export default function PaymentOptionsScreen() {
         .insert({
           ...basePayload,
           payment_method: "online",
-          status: "pending_payment",
+          status: "pending",
         })
         .select("id")
         .single();
@@ -363,7 +363,7 @@ export default function PaymentOptionsScreen() {
                 <Ionicons name="cash-outline" size={26} color={colors.gold} />
                 <View style={styles.optionText}>
                   <Text style={styles.optionTitle}>الدفع كاش</Text>
-                  <Text style={styles.optionSub}>عند التسليم — حالة الطلب: بانتظار الكاش</Text>
+                  <Text style={styles.optionSub}>عند التسليم</Text>
                 </View>
                 <Ionicons name="chevron-back" size={22} color={colors.textMuted} />
               </>

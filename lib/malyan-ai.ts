@@ -1,4 +1,4 @@
-import { supabase } from "./supabase";
+import { SUPABASE_ANON_KEY, SUPABASE_URL, supabase } from "./supabase";
 
 export type ChatRole = "user" | "assistant";
 
@@ -219,28 +219,53 @@ async function recordCustomerTurn(payload: InvokeAiPayload): Promise<void> {
 }
 
 export async function invokeMalyanAi(payload: InvokeAiPayload): Promise<InvokeAiResult> {
-  const { data, error } = await supabase.functions.invoke("malyan-ai-chat", {
-    body: {
-      message: payload.message,
-      userId: payload.userId,
-      conversationId: payload.conversationId,
-      history: payload.history,
-      mode: payload.mode ?? "chat",
-      preferences: payload.preferences ?? {},
-      image: payload.image,
-    },
-  });
+  const body = {
+    message: payload.message,
+    userId: payload.userId,
+    conversationId: payload.conversationId,
+    history: payload.history,
+    mode: payload.mode ?? "chat",
+    preferences: payload.preferences ?? {},
+    image: payload.image,
+  };
+  const edgeUrl = `${SUPABASE_URL}/functions/v1/malyan-ai-chat`;
 
-  if (error) {
-    throw new Error(error.message);
-  }
+  const invokeOnce = async (): Promise<Record<string, unknown>> => {
+    const res = await fetch(edgeUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify(body),
+    });
+    const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    if (!res.ok || json.ok === false) {
+      const code = String(json.code ?? "");
+      const err = String(json.error ?? "AI_UNAVAILABLE");
+      throw new Error(code ? `${code}: ${err}` : err);
+    }
+    return json;
+  };
 
-  const response = (data ?? {}) as Record<string, unknown>;
-  const ok = Boolean(response.ok);
-  if (!ok) {
-    const code = String(response.code ?? "");
-    const errorText = String(response.error ?? "تعذر إكمال الطلب.");
-    throw new Error(code ? `${code}: ${errorText}` : errorText);
+  let response: Record<string, unknown>;
+  try {
+    response = await invokeOnce();
+  } catch (firstError) {
+    const firstText = firstError instanceof Error ? firstError.message : String(firstError);
+    const isDailyLimit =
+      firstText.includes("DAILY_MESSAGES_EXCEEDED") ||
+      firstText.includes("DAILY_BUDGET_EXCEEDED");
+    if (isDailyLimit) {
+      throw new Error(firstText);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    try {
+      response = await invokeOnce();
+    } catch {
+      throw new Error("عذراً، مليان الذكي غير متاح حالياً");
+    }
   }
 
   await recordCustomerTurn(payload);
