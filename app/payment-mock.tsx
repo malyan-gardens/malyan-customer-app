@@ -24,81 +24,30 @@ function waitMs(ms: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, ms));
 }
 
-function parseInvoiceItemsForEmail(items: unknown): Array<{
-  name: string;
-  quantity: number;
-  lineTotal: number;
-  currency: string;
-}> {
-  if (!Array.isArray(items)) return [];
-  return items.map((row) => {
-    const r = row as Record<string, unknown>;
-    return {
-      name: String(r.name ?? r.description ?? "منتج"),
-      quantity: Number(r.quantity ?? r.qty ?? 1),
-      lineTotal: Number(r.lineTotal ?? r.amount ?? 0),
-      currency: String(r.currency ?? "QAR"),
-    };
-  });
-}
+/** Invoice row from Supabase `invoices` (snake_case). Dashboard API expects camelCase in JSON body — see app.malyangardens.com/api/send-invoice-email (not in this repo). */
+type InvoiceEmailRow = {
+  invoice_number?: string | null;
+  customer_name?: string | null;
+  customer_email?: string | null;
+  items?: unknown;
+  total_amount?: number | null;
+  payment_method?: string | null;
+  issued_date?: string | null;
+};
 
-function buildInvoiceEmailHtml(input: {
-  invoiceNumber: string;
-  orderId: string;
-  customerName: string;
-  customerPhone: string;
-  items: Array<{ name: string; quantity: number; lineTotal: number; currency: string }>;
-  total: number;
-  paymentMethod: string;
-  issuedDate: string;
-}): string {
-  const rows = input.items
-    .map(
-      (i) =>
-        `<tr><td style="padding:8px;border:1px solid #ddd;">${i.name}</td><td style="padding:8px;border:1px solid #ddd;">${i.quantity}</td><td style="padding:8px;border:1px solid #ddd;">${i.lineTotal.toFixed(2)} ${i.currency}</td></tr>`
-    )
-    .join("");
-  return `
-    <div dir="rtl" style="font-family:Arial,sans-serif;line-height:1.8">
-      <h2>فاتورة طلبك من مليان للحدائق</h2>
-      <p><strong>رقم الفاتورة:</strong> ${input.invoiceNumber}</p>
-      <p><strong>رقم الطلب:</strong> ${input.orderId}</p>
-      <p><strong>العميل:</strong> ${input.customerName}</p>
-      <p><strong>الهاتف:</strong> ${input.customerPhone || "—"}</p>
-      <p><strong>تاريخ الإصدار:</strong> ${input.issuedDate || "—"}</p>
-      <p><strong>طريقة الدفع:</strong> ${input.paymentMethod}</p>
-      <table style="border-collapse:collapse;width:100%">
-        <thead><tr><th style="padding:8px;border:1px solid #ddd;">المنتج</th><th style="padding:8px;border:1px solid #ddd;">الكمية</th><th style="padding:8px;border:1px solid #ddd;">الإجمالي</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-      <p><strong>المجموع:</strong> ${input.total.toFixed(2)} QAR</p>
-      <p>شكراً لثقتكم بمليان للحدائق</p>
-    </div>
-  `;
-}
-
-async function postSendInvoiceEmail(invoice: Record<string, unknown>, orderId: string) {
-  const invoiceNumber = String(invoice.invoice_number ?? "—");
-  const to = String(invoice.customer_email ?? "").trim();
-  const html = buildInvoiceEmailHtml({
-    invoiceNumber,
-    orderId,
-    customerName: String(invoice.customer_name ?? "عميل"),
-    customerPhone: String(invoice.customer_phone ?? ""),
-    items: parseInvoiceItemsForEmail(invoice.items),
-    total: Number(invoice.total_amount ?? 0),
-    paymentMethod: String(invoice.payment_method ?? "أونلاين"),
-    issuedDate: String(invoice.issued_date ?? ""),
-  });
-
+async function postSendInvoiceEmail(invoice: InvoiceEmailRow) {
+  const customerEmail = String(invoice.customer_email ?? "").trim();
   const res = await fetch(SEND_INVOICE_EMAIL_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      invoice,
-      to,
-      subject: `فاتورة ${invoiceNumber} — مليان للحدائق`,
-      html,
+      to: customerEmail,
+      invoiceNumber: invoice.invoice_number,
+      customerName: invoice.customer_name,
+      items: invoice.items,
+      total: invoice.total_amount,
+      paymentMethod: invoice.payment_method,
+      issuedDate: invoice.issued_date,
     }),
   });
   console.log("[payment-mock] send-invoice-email status:", res.status);
@@ -166,7 +115,7 @@ export default function PaymentMockScreen() {
           console.log("[payment-mock] invoice fetch error:", invErr);
         } else if (invoice) {
           try {
-            await postSendInvoiceEmail(invoice as Record<string, unknown>, orderId);
+            await postSendInvoiceEmail(invoice as InvoiceEmailRow);
           } catch (emailErr) {
             console.log("[payment-mock] send-invoice-email failed:", emailErr);
           }
