@@ -1,6 +1,5 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
-import { Ionicons } from "@expo/vector-icons";
 import {
   ActivityIndicator,
   Platform,
@@ -58,17 +57,20 @@ export default function PaymentMockScreen() {
     if (orderIdStr) {
       try {
         // Online cart orders: mark paid (DB trigger creates invoice). No invoice/email here.
-        const { error: upErr } = await supabase
+        const orderId = orderIdStr;
+        console.log("Updating orderId:", orderId, typeof orderId);
+        const { error } = await supabase
           .from("orders")
           .update({ status: "paid" })
-          .eq("id", orderIdStr);
-        if (upErr) throw upErr;
+          .eq("id", orderId);
+        console.log("Update result error:", error);
+        if (error) throw error;
 
         useCartStore.getState().clear();
         useCheckoutDraftStore.getState().reset();
         router.replace({
           pathname: "/order-success",
-          params: { orderId: orderIdStr, total: String(amount) },
+          params: { orderId, total: String(amount) },
         });
         return;
       } catch (e) {
