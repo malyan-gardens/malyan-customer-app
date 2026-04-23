@@ -189,6 +189,7 @@ export default function PaymentMockScreen() {
         const fallbackInvoiceNumber = `MAL-${today.split("-")[0]}-${orderIdStr.replace(/-/g, "").slice(-4).toUpperCase()}`;
           await supabase.from("invoices").insert({
           order_id: orderIdStr,
+            reference_type: "order",
           invoice_number: fallbackInvoiceNumber,
             customer_name: String(ord?.customer_name ?? ""),
             customer_email: customerEmailForInvoice,
@@ -246,6 +247,7 @@ export default function PaymentMockScreen() {
       const { data: invoiceData } = await supabase
         .from("invoices")
         .insert({
+          reference_type: "order",
           invoice_number: "",
           customer_name: nextUserName,
           customer_email: nextUserEmail,
