@@ -17,6 +17,93 @@ import { useCheckoutDraftStore } from "../store/checkoutDraftStore";
 const QNB_BLUE = "#003f7f";
 const font = Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined });
 
+const SEND_INVOICE_EMAIL_URL = "https://app.malyangardens.com/api/send-invoice-email";
+const INVOICE_FETCH_DELAY_MS = 3000;
+
+function waitMs(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
+
+function parseInvoiceItemsForEmail(items: unknown): Array<{
+  name: string;
+  quantity: number;
+  lineTotal: number;
+  currency: string;
+}> {
+  if (!Array.isArray(items)) return [];
+  return items.map((row) => {
+    const r = row as Record<string, unknown>;
+    return {
+      name: String(r.name ?? r.description ?? "منتج"),
+      quantity: Number(r.quantity ?? r.qty ?? 1),
+      lineTotal: Number(r.lineTotal ?? r.amount ?? 0),
+      currency: String(r.currency ?? "QAR"),
+    };
+  });
+}
+
+function buildInvoiceEmailHtml(input: {
+  invoiceNumber: string;
+  orderId: string;
+  customerName: string;
+  customerPhone: string;
+  items: Array<{ name: string; quantity: number; lineTotal: number; currency: string }>;
+  total: number;
+  paymentMethod: string;
+  issuedDate: string;
+}): string {
+  const rows = input.items
+    .map(
+      (i) =>
+        `<tr><td style="padding:8px;border:1px solid #ddd;">${i.name}</td><td style="padding:8px;border:1px solid #ddd;">${i.quantity}</td><td style="padding:8px;border:1px solid #ddd;">${i.lineTotal.toFixed(2)} ${i.currency}</td></tr>`
+    )
+    .join("");
+  return `
+    <div dir="rtl" style="font-family:Arial,sans-serif;line-height:1.8">
+      <h2>فاتورة طلبك من مليان للحدائق</h2>
+      <p><strong>رقم الفاتورة:</strong> ${input.invoiceNumber}</p>
+      <p><strong>رقم الطلب:</strong> ${input.orderId}</p>
+      <p><strong>العميل:</strong> ${input.customerName}</p>
+      <p><strong>الهاتف:</strong> ${input.customerPhone || "—"}</p>
+      <p><strong>تاريخ الإصدار:</strong> ${input.issuedDate || "—"}</p>
+      <p><strong>طريقة الدفع:</strong> ${input.paymentMethod}</p>
+      <table style="border-collapse:collapse;width:100%">
+        <thead><tr><th style="padding:8px;border:1px solid #ddd;">المنتج</th><th style="padding:8px;border:1px solid #ddd;">الكمية</th><th style="padding:8px;border:1px solid #ddd;">الإجمالي</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <p><strong>المجموع:</strong> ${input.total.toFixed(2)} QAR</p>
+      <p>شكراً لثقتكم بمليان للحدائق</p>
+    </div>
+  `;
+}
+
+async function postSendInvoiceEmail(invoice: Record<string, unknown>, orderId: string) {
+  const invoiceNumber = String(invoice.invoice_number ?? "—");
+  const to = String(invoice.customer_email ?? "").trim();
+  const html = buildInvoiceEmailHtml({
+    invoiceNumber,
+    orderId,
+    customerName: String(invoice.customer_name ?? "عميل"),
+    customerPhone: String(invoice.customer_phone ?? ""),
+    items: parseInvoiceItemsForEmail(invoice.items),
+    total: Number(invoice.total_amount ?? 0),
+    paymentMethod: String(invoice.payment_method ?? "أونلاين"),
+    issuedDate: String(invoice.issued_date ?? ""),
+  });
+
+  const res = await fetch(SEND_INVOICE_EMAIL_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      invoice,
+      to,
+      subject: `فاتورة ${invoiceNumber} — مليان للحدائق`,
+      html,
+    }),
+  });
+  console.log("[payment-mock] send-invoice-email status:", res.status);
+}
+
 function formatCardNumber(raw: string) {
   const digits = raw.replace(/\D/g, "").slice(0, 16);
   return digits.replace(/(.{4})/g, "$1 ").trim();
@@ -56,7 +143,6 @@ export default function PaymentMockScreen() {
 
     if (orderIdStr) {
       try {
-        // Online cart orders: mark paid (DB trigger creates invoice). Invoice email: dashboard only.
         const orderId = orderIdStr;
         console.log("Updating orderId:", orderId, typeof orderId);
         const { error } = await supabase
@@ -65,6 +151,28 @@ export default function PaymentMockScreen() {
           .eq("id", orderId);
         console.log("Update result error:", error);
         if (error) throw error;
+
+        await waitMs(INVOICE_FETCH_DELAY_MS);
+
+        const { data: invoice, error: invErr } = await supabase
+          .from("invoices")
+          .select("*")
+          .eq("reference_id", orderId)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (invErr) {
+          console.log("[payment-mock] invoice fetch error:", invErr);
+        } else if (invoice) {
+          try {
+            await postSendInvoiceEmail(invoice as Record<string, unknown>, orderId);
+          } catch (emailErr) {
+            console.log("[payment-mock] send-invoice-email failed:", emailErr);
+          }
+        } else {
+          console.log("[payment-mock] no invoice for reference_id:", orderId);
+        }
 
         useCartStore.getState().clear();
         useCheckoutDraftStore.getState().reset();
