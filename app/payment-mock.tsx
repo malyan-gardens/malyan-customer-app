@@ -45,7 +45,6 @@ export default function PaymentMockScreen() {
   const [loading, setLoading] = useState(false);
 
   const confirmPayment = async () => {
-    console.log("DEBUG orderId:", params.orderId, "orderIdStr will be:", typeof params.orderId);
     setLoading(true);
 
     const orderIdRaw = params.orderId;
@@ -58,59 +57,18 @@ export default function PaymentMockScreen() {
 
     if (orderIdStr) {
       try {
+        // Online cart orders: mark paid (DB trigger creates invoice). No invoice/email here.
         const { error: upErr } = await supabase
           .from("orders")
           .update({ status: "paid" })
           .eq("id", orderIdStr);
         if (upErr) throw upErr;
-        console.log("1. Order status updated to paid");
 
-        const { data: ord, error: fetchErr } = await supabase
-          .from("orders")
-          .select("*")
-          .eq("id", orderIdStr)
-          .single();
-        if (fetchErr) throw fetchErr;
-        console.log("2. Order fetched:", ord?.id);
-
-        const rawItems = Array.isArray(ord?.items) ? ord.items : [];
-        for (const row of rawItems as Record<string, unknown>[]) {
-          const productId = String(row.productId ?? "");
-          if (!productId) continue;
-          const orderedQty = Number(row.quantity ?? 0);
-          if (orderedQty <= 0) continue;
-
-          const { data: inv } = await supabase
-            .from("inventory")
-            .select("quantity")
-            .eq("id", productId)
-            .single();
-
-          if (inv && Number(inv.quantity ?? 0) > 0) {
-            const newQty = Math.max(0, Number(inv.quantity ?? 0) - orderedQty);
-            await supabase
-              .from("inventory")
-              .update({ quantity: newQty })
-              .eq("id", productId);
-          }
-        }
-
-        await supabase.from("notifications").insert({
-          title: "تم دفع طلب أونلاين",
-          body: `${String(ord?.customer_name ?? "عميل")} — ${service}`,
-          type: "order",
-          reference_id: orderIdStr,
-          reference_type: "orders",
-          is_read: false,
-        });
-        console.log("4. Notification inserted");
-
-        console.log("5. About to navigate to order-success");
         useCartStore.getState().clear();
         useCheckoutDraftStore.getState().reset();
         router.replace({
           pathname: "/order-success",
-          params: { orderId: orderIdStr, total: String(Number(ord?.total_amount ?? amount)) },
+          params: { orderId: orderIdStr, total: String(amount) },
         });
         return;
       } catch (e) {
