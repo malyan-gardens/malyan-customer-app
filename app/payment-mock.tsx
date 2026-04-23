@@ -40,17 +40,25 @@ async function postSendInvoiceEmail(invoice: InvoiceEmailRow) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  console.log("auth user email:", user?.email);
+  console.log("invoice phone:", invoice.customer_phone);
+
   let customerEmail = "";
+  let profile: { email?: string | null } | null = null;
   if (user?.email) {
     customerEmail = user.email;
   } else if (invoice.customer_phone) {
-    const { data: profile } = await supabase
+    const { data } = await supabase
       .from("profiles")
       .select("email")
       .eq("phone", invoice.customer_phone)
       .maybeSingle();
+    profile = data;
     customerEmail = profile?.email ?? "";
   }
+
+  console.log("profile email:", profile?.email);
+  console.log("final customerEmail:", customerEmail);
 
   const res = await fetch(SEND_INVOICE_EMAIL_URL, {
     method: "POST",
