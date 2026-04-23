@@ -27,6 +27,39 @@ const IMAGE_H = 280;
 const { width: SCREEN_W } = Dimensions.get("window");
 const RELATED_SIZE = 120;
 
+function getProductImages(product: InventoryRow | null): string[] {
+  if (!product) return [];
+  const fallback = product.image_url ? [product.image_url] : [];
+  const raw = (product as InventoryRow & { image_urls?: unknown }).image_urls;
+  if (!raw) return fallback;
+  if (Array.isArray(raw)) {
+    const parsed = (raw as unknown[])
+      .map((v: unknown) => String(v ?? "").trim())
+      .filter((v: string) => /^https?:\/\//.test(v));
+    return parsed.length ? parsed : fallback;
+  }
+  if (typeof raw === "string") {
+    const value = raw.trim();
+    if (!value) return fallback;
+    try {
+      const parsedJson = JSON.parse(value);
+      if (Array.isArray(parsedJson)) {
+        const parsed = (parsedJson as unknown[])
+          .map((v: unknown) => String(v ?? "").trim())
+          .filter((v: string) => /^https?:\/\//.test(v));
+        if (parsed.length) return parsed;
+      }
+    } catch {
+      const parsed = value
+        .split(",")
+        .map((v) => v.trim())
+        .filter((v) => /^https?:\/\//.test(v));
+      if (parsed.length) return parsed;
+    }
+  }
+  return fallback;
+}
+
 export default function ProductDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -92,6 +125,7 @@ export default function ProductDetailScreen() {
     ? `${(product.selling_price ?? 0).toFixed(2)} ${product.currency ?? "QAR"}`
     : "";
   const isOutOfStock = (product?.quantity ?? 0) === 0;
+  const productImages = useMemo(() => getProductImages(product), [product]);
 
   const decQty = () => setQty((q) => Math.max(1, q - 1));
   const incQty = () => setQty((q) => Math.min(maxAllowed, q + 1));
@@ -181,12 +215,17 @@ export default function ProductDetailScreen() {
           nestedScrollEnabled
         >
           <View style={styles.heroWrap}>
-            {product.image_url ? (
-              <Image
-                source={{ uri: product.image_url }}
-                style={styles.heroImage}
-                resizeMode="cover"
-              />
+            {productImages.length > 0 ? (
+              <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false}>
+                {productImages.map((img, idx) => (
+                  <Image
+                    key={`${img}-${idx}`}
+                    source={{ uri: img }}
+                    style={styles.heroImage}
+                    resizeMode="cover"
+                  />
+                ))}
+              </ScrollView>
             ) : (
               <LinearGradient
                 colors={[colors.surface, colors.bgElevated]}
@@ -195,6 +234,11 @@ export default function ProductDetailScreen() {
                 <Ionicons name="leaf-outline" size={80} color={colors.brand} />
               </LinearGradient>
             )}
+            {productImages.length > 1 ? (
+              <View style={styles.heroImageCount}>
+                <Text style={styles.heroImageCountText}>{productImages.length} صور</Text>
+              </View>
+            ) : null}
             <Pressable style={styles.backOverlay} onPress={() => router.back()}>
               <Ionicons name="arrow-back" size={24} color={colors.white} />
             </Pressable>
@@ -371,6 +415,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
+  heroImageCount: {
+    position: "absolute",
+    bottom: 12,
+    right: 12,
+    backgroundColor: colors.overlay,
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  heroImageCountText: { color: colors.white, fontWeight: "800", fontSize: 11 },
   name: {
     color: colors.white,
     fontSize: 22,

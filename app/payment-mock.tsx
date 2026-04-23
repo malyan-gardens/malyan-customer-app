@@ -209,7 +209,9 @@ export default function PaymentMockScreen() {
         }
 
         console.log("5. About to navigate to order-success");
-        setSuccess(true);
+        useCartStore.getState().clear();
+        useCheckoutDraftStore.getState().reset();
+        router.replace(`/official-receipt?orderId=${encodeURIComponent(orderIdStr)}` as never);
         return;
       } catch (e) {
         console.error("PATH A ERROR:", e instanceof Error ? e.message : JSON.stringify(e));

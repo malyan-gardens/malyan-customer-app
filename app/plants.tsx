@@ -4,6 +4,7 @@ import { Stack, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Dimensions,
   Image,
   Modal,
   Pressable,
@@ -11,6 +12,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -21,6 +23,7 @@ import { useCartStore } from "../store/cartStore";
 
 export default function PlantsScreen() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
   const addItem = useCartStore((s) => s.addItem);
   const [items, setItems] = useState<InventoryRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -82,6 +85,8 @@ export default function PlantsScreen() {
     setPriceMax("");
   };
 
+  const columns = width >= 900 ? 3 : 2;
+
   if (loading) {
     return (
       <>
@@ -133,10 +138,10 @@ export default function PlantsScreen() {
               <Text style={styles.empty}>لا توجد منتجات.</Text>
             ) : (
               Array.from(
-                { length: Math.ceil(filtered.length / 2) },
+                { length: Math.ceil(filtered.length / columns) },
                 (_, row) => (
                   <View key={row} style={styles.gridRow}>
-                    {filtered.slice(row * 2, row * 2 + 2).map((item) => (
+                    {filtered.slice(row * columns, row * columns + columns).map((item) => (
                       <View key={item.id} style={styles.gridCell}>
                         <PlantCard
                           item={item}
@@ -280,22 +285,75 @@ function PlantCard({
   onOrder: () => void;
   onAdd: () => void;
 }) {
+  const { width } = useWindowDimensions();
   const title = item.name_ar ?? "";
   const price = (item.selling_price ?? 0).toFixed(2);
   const isOutOfStock = (item.quantity ?? 0) === 0;
+  const screenWidth = Dimensions.get("window").width;
+  const columns = width >= 900 ? 3 : 2;
+  const cardWidth = (screenWidth - spacing.md * 2 - 12 * (columns - 1)) / columns;
+  const imageHeight = Math.max(110, Math.floor(cardWidth * 0.72));
+  const images = useMemo(() => {
+    const fallback = item.image_url ? [item.image_url] : [];
+    const raw = (item as InventoryRow & { image_urls?: unknown }).image_urls;
+    if (!raw) return fallback;
+    if (Array.isArray(raw)) {
+      const parsed = (raw as unknown[])
+        .map((v: unknown) => String(v ?? "").trim())
+        .filter((v: string) => /^https?:\/\//.test(v));
+      return parsed.length ? parsed : fallback;
+    }
+    if (typeof raw === "string") {
+      const trimmed = raw.trim();
+      if (!trimmed) return fallback;
+      try {
+        const asJson = JSON.parse(trimmed);
+        if (Array.isArray(asJson)) {
+          const parsed = (asJson as unknown[])
+            .map((v: unknown) => String(v ?? "").trim())
+            .filter((v: string) => /^https?:\/\//.test(v));
+          if (parsed.length) return parsed;
+        }
+      } catch {
+        const parsed = trimmed
+          .split(",")
+          .map((v) => v.trim())
+          .filter((v) => /^https?:\/\//.test(v));
+        if (parsed.length) return parsed;
+      }
+    }
+    return fallback;
+  }, [item]);
   return (
     <View style={styles.card}>
       <Pressable
         onPress={onOpen}
         style={({ pressed }) => [pressed && { opacity: 0.94 }]}
       >
-        <View style={styles.cardImg}>
-          {item.image_url ? (
-            <Image
-              source={{ uri: item.image_url }}
-              style={styles.cardImgInner}
-              resizeMode="cover"
-            />
+        <View style={[styles.cardImg, { height: imageHeight }]}>
+          {images.length > 0 ? (
+            <>
+              <ScrollView
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                nestedScrollEnabled
+              >
+                {images.map((img: string, idx: number) => (
+                  <Image
+                    key={`${img}-${idx}`}
+                    source={{ uri: img }}
+                    style={[styles.cardImgInner, { width: cardWidth, height: imageHeight }]}
+                    resizeMode="cover"
+                  />
+                ))}
+              </ScrollView>
+              {images.length > 1 ? (
+                <View style={styles.imageCountBadge}>
+                  <Text style={styles.imageCountBadgeText}>{images.length} صور</Text>
+                </View>
+              ) : null}
+            </>
           ) : (
             <LinearGradient
               colors={[colors.surface, colors.bgElevated]}
@@ -404,6 +462,18 @@ const styles = StyleSheet.create({
     ...shadows.card,
   },
   cardImg: { aspectRatio: 1, backgroundColor: colors.bgElevated, position: "relative" },
+  imageCountBadge: {
+    position: "absolute",
+    bottom: 8,
+    left: 8,
+    backgroundColor: colors.overlay,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  imageCountBadgeText: { color: colors.white, fontSize: 10, fontWeight: "800" },
   stockBadge: {
     position: "absolute",
     top: 8,
@@ -415,11 +485,11 @@ const styles = StyleSheet.create({
   },
   stockBadgeText: { color: colors.white, fontWeight: "800", fontSize: 11, textAlign: "right" },
   cardImgInner: { width: "100%", height: "100%", alignItems: "center", justifyContent: "center" },
-  cardBody: { padding: 12 },
+  cardBody: { padding: 10 },
   cardTitle: {
     color: colors.white,
     fontWeight: "700",
-    fontSize: 14,
+    fontSize: 13,
     textAlign: "right",
     minHeight: 40,
   },
@@ -430,23 +500,23 @@ const styles = StyleSheet.create({
     textAlign: "right",
   },
   cardAdd: {
-    marginHorizontal: 12,
-    marginBottom: 8,
+    marginHorizontal: 10,
+    marginBottom: 6,
     backgroundColor: colors.brand,
-    paddingVertical: 10,
+    paddingVertical: 8,
     borderRadius: radii.sm,
     alignItems: "center",
   },
-  cardAddText: { color: colors.white, fontWeight: "800", fontSize: 13 },
+  cardAddText: { color: colors.white, fontWeight: "800", fontSize: 12 },
   cardOrder: {
-    marginHorizontal: 12,
-    marginBottom: 12,
+    marginHorizontal: 10,
+    marginBottom: 10,
     backgroundColor: colors.gold,
-    paddingVertical: 10,
+    paddingVertical: 8,
     borderRadius: radii.sm,
     alignItems: "center",
   },
-  cardOrderText: { color: colors.bg, fontWeight: "800", fontSize: 13 },
+  cardOrderText: { color: colors.bg, fontWeight: "800", fontSize: 12 },
   cardBtnDisabled: { opacity: 0.5 },
   errorBox: { padding: spacing.lg, alignItems: "center" },
   errorText: { color: colors.textSecondary, textAlign: "center" },

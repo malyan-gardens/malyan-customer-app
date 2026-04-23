@@ -17,6 +17,12 @@ import { supabase } from "../lib/supabase";
 import { cartTotal, useCartStore, type CartLine } from "../store/cartStore";
 import { useCheckoutDraftStore } from "../store/checkoutDraftStore";
 import { colors, radii, shadows, spacing } from "../lib/theme";
+import {
+  extractQatarPhoneDigits,
+  isValidQatarPhone,
+  normalizeQatarPhone,
+  QATAR_COUNTRY_CODE,
+} from "../lib/customer";
 
 export default function CheckoutScreen() {
   const router = useRouter();
@@ -65,6 +71,7 @@ export default function CheckoutScreen() {
   const discountLabel = params.discountLabel ? String(params.discountLabel) : "";
 
   const [customerName, setCustomerName] = useState("");
+  const [customerPhoneDigits, setCustomerPhoneDigits] = useState("");
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -79,10 +86,31 @@ export default function CheckoutScreen() {
         if (!user || cancelled) return;
         const fullName = String(user.user_metadata?.full_name ?? "").trim();
         const email = String(user.email ?? "").trim();
+        const authPhone = normalizeQatarPhone(user.phone);
+        const authMetaPhone = normalizeQatarPhone(
+          String(user.user_metadata?.phone ?? "")
+        );
+        let profilePhone = "";
+        try {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("phone")
+            .eq("id", user.id)
+            .maybeSingle();
+          profilePhone = normalizeQatarPhone(
+            String((profile as { phone?: string } | null)?.phone ?? "")
+          );
+        } catch {
+          profilePhone = "";
+        }
+        const resolvedPhone = profilePhone || authPhone || authMetaPhone;
         if (fullName) {
           setCustomerName(fullName);
         } else if (email) {
           setCustomerName(email);
+        }
+        if (resolvedPhone) {
+          setCustomerPhoneDigits(extractQatarPhoneDigits(resolvedPhone));
         }
       } catch {
         // Keep manual name entry if user profile fetch fails.
@@ -99,6 +127,11 @@ export default function CheckoutScreen() {
       setError("يرجى إدخال الاسم.");
       return;
     }
+    const normalizedPhone = normalizeQatarPhone(customerPhoneDigits);
+    if (!isValidQatarPhone(normalizedPhone)) {
+      setError("رقم الجوال يجب أن يكون بهذا الشكل: +974XXXXXXXX");
+      return;
+    }
     if (orderItems.length === 0) {
       setError("السلة فارغة.");
       return;
@@ -109,7 +142,7 @@ export default function CheckoutScreen() {
       orderLines: orderItems,
       fromDirectProduct: Boolean(directProduct),
       customerName: customerName.trim(),
-      customerPhone: "",
+      customerPhone: normalizedPhone,
       notes: notes.trim(),
     });
     setSubmitting(false);
@@ -203,6 +236,20 @@ export default function CheckoutScreen() {
             placeholderTextColor={colors.textMuted}
             style={styles.input}
           />
+
+          <Text style={styles.label}>رقم الجوال</Text>
+          <View style={styles.phoneRow}>
+            <Text style={styles.phonePrefix}>{QATAR_COUNTRY_CODE}</Text>
+            <TextInput
+              value={customerPhoneDigits}
+              onChangeText={(v) => setCustomerPhoneDigits(v.replace(/\D/g, "").slice(0, 8))}
+              placeholder="XXXXXXXX"
+              placeholderTextColor={colors.textMuted}
+              keyboardType="number-pad"
+              style={styles.phoneInput}
+              maxLength={8}
+            />
+          </View>
 
           <Text style={styles.label}>ملاحظات (اختياري)</Text>
           <TextInput
@@ -332,6 +379,30 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     fontSize: 16,
     fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
+  },
+  phoneRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 14,
+    minHeight: 54,
+    marginBottom: spacing.md,
+  },
+  phonePrefix: {
+    color: colors.gold,
+    fontWeight: "800",
+    fontSize: 16,
+    marginRight: 10,
+  },
+  phoneInput: {
+    flex: 1,
+    color: colors.white,
+    fontSize: 16,
+    textAlign: "right",
+    paddingVertical: 12,
   },
   inputMulti: { minHeight: 88, textAlignVertical: "top" },
   error: {

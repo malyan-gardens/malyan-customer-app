@@ -16,6 +16,12 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from "../lib/supabase";
 import { useCheckoutDraftStore } from "../store/checkoutDraftStore";
 import { colors, radii, shadows, spacing } from "../lib/theme";
+import {
+  extractQatarPhoneDigits,
+  isValidQatarPhone,
+  normalizeQatarPhone,
+  QATAR_COUNTRY_CODE,
+} from "../lib/customer";
 
 type Mode = "gps" | "manual";
 
@@ -34,6 +40,7 @@ export default function OrderLocationScreen() {
   const orderLines = useCheckoutDraftStore((s) => s.orderLines);
   const setLocationStep = useCheckoutDraftStore((s) => s.setLocationStep);
   const setPhoneNumber = useCheckoutDraftStore((s) => s.setPhoneNumber);
+  const customerPhone = useCheckoutDraftStore((s) => s.customerPhone);
 
   const [mode, setMode] = useState<Mode>("gps");
   const [loading, setLoading] = useState(false);
@@ -108,16 +115,20 @@ export default function OrderLocationScreen() {
         const {
           data: { user },
         } = await supabase.auth.getUser();
-        const raw = user?.phone?.trim() ?? "";
-        const digits = sanitizeDigits(raw);
-        if (digits.startsWith("974") && digits.length >= 11) {
-          setPhone(digits.slice(-8));
+        const profilePhone = normalizeQatarPhone(customerPhone);
+        if (profilePhone) {
+          setPhone(extractQatarPhoneDigits(profilePhone));
+          return;
+        }
+        const raw = normalizeQatarPhone(user?.phone?.trim() ?? "");
+        if (raw) {
+          setPhone(extractQatarPhoneDigits(raw));
         }
       } catch {
         // Keep manual phone entry if profile fetch fails.
       }
     })();
-  }, [orderLines.length, router]);
+  }, [customerPhone, orderLines.length, router]);
 
   useEffect(() => {
     if (orderLines.length === 0) return;
@@ -127,9 +138,9 @@ export default function OrderLocationScreen() {
   }, [mode, orderLines.length, resolveLocation]);
 
   const onConfirm = () => {
-    const phoneDigits = sanitizeDigits(phone).slice(0, 8);
-    if (phoneDigits.length !== 8) {
-      Alert.alert("تنبيه", "يرجى إدخال رقم تلفون صحيح من 8 أرقام.");
+    const normalizedPhone = normalizeQatarPhone(phone);
+    if (!isValidQatarPhone(normalizedPhone)) {
+      Alert.alert("تنبيه", "الرقم يجب أن يكون بهذا الشكل: +974XXXXXXXX");
       return;
     }
 
@@ -140,7 +151,7 @@ export default function OrderLocationScreen() {
       }
       const finalAddress = address.trim() || `${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}`;
       setLocationStep(coords.lat, coords.lng, finalAddress);
-      setPhoneNumber(phoneDigits);
+      setPhoneNumber(normalizedPhone);
       router.push("/payment-options" as never);
       return;
     }
@@ -154,7 +165,7 @@ export default function OrderLocationScreen() {
       ? `مبنى ${buildingNo.trim()}، شارع ${streetNo.trim()}، منطقة ${zoneNo.trim()}، ${notes}`
       : `مبنى ${buildingNo.trim()}، شارع ${streetNo.trim()}، منطقة ${zoneNo.trim()}`;
     setLocationStep(0, 0, finalManualAddress);
-    setPhoneNumber(phoneDigits);
+    setPhoneNumber(normalizedPhone);
     router.push("/payment-options" as never);
   };
 
@@ -288,7 +299,7 @@ export default function OrderLocationScreen() {
           <View style={styles.card}>
             <Text style={styles.phoneLabel}>رقم التلفون</Text>
             <View style={styles.phoneRow}>
-              <Text style={styles.prefix}>+974</Text>
+              <Text style={styles.prefix}>{QATAR_COUNTRY_CODE}</Text>
               <TextInput
                 value={phone}
                 onChangeText={(v) => setPhone(sanitizeDigits(v).slice(0, 8))}

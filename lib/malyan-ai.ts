@@ -219,99 +219,48 @@ async function recordCustomerTurn(payload: InvokeAiPayload): Promise<void> {
 }
 
 export async function invokeMalyanAi(payload: InvokeAiPayload): Promise<InvokeAiResult> {
-  const SYSTEM_PROMPT = `أنت مليان الذكي، مستشار متخصص في النباتات والحدائق لشركة مليان للحدائق في قطر.
-تتحدث فقط عن: النباتات، تصميم الحدائق، الصيانة، منتجات مليان.
-إذا سُئلت عن أي موضوع آخر قل: "أنا متخصص في عالم النباتات والحدائق فقط!"
-دائماً رد بنفس لغة المستخدم.`;
-
-  const [inventoryContext, promotionsContext, customerProfile] = await Promise.all([
-    fetchInventoryContextString(),
-    fetchPromotionsContextString(),
-    fetchCustomerProfileForPrompt(payload.userId),
-  ]);
-
-  let systemPrompt = SYSTEM_PROMPT;
-  if (inventoryContext) {
-    systemPrompt += `\n\n--- بيانات المخزون ---\n${inventoryContext}`;
-  }
-  if (promotionsContext) {
-    systemPrompt += `\n\n--- العروض النشطة ---\n${promotionsContext}`;
-  }
-  if (customerProfile) {
-    systemPrompt += `\n\n--- ملف العميل ---\n${buildCustomerProfilePromptBlock(customerProfile)}`;
-  }
-
-  // Prefer a multimodal model when we have an image.
-  const model = payload.image?.base64 ? "claude-sonnet-4-6" : "claude-haiku-4-5";
-
-  const history = payload.history?.length
-    ? payload.history.map((h) => ({
-        role: h.role,
-        content: h.content,
-      }))
-    : [];
-
-  const imageBase64 = payload.image?.base64;
-  const userContent = imageBase64
-    ? [
-        {
-          type: "image",
-          source: {
-            type: "base64",
-            media_type: payload.image?.mediaType ?? "image/jpeg",
-            data: imageBase64,
-          },
-        },
-        { type: "text", text: payload.message },
-      ]
-    : payload.message;
-
-  const messages =
-    history.length > 0
-      ? [...history, { role: "user", content: userContent }]
-      : [{ role: "user", content: userContent }];
-
-  // On web we can call the same-origin proxy. On native, use the Vercel domain.
-  const proxyUrl =
-    typeof window !== "undefined"
-      ? "/api/anthropic-proxy"
-      : "https://malyan-customer-app.vercel.app/api/anthropic-proxy";
-
-  const response = await fetch(proxyUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
+  const { data, error } = await supabase.functions.invoke("malyan-ai-chat", {
+    body: {
+      message: payload.message,
+      userId: payload.userId,
+      conversationId: payload.conversationId,
+      history: payload.history,
+      mode: payload.mode ?? "chat",
+      preferences: payload.preferences ?? {},
+      image: payload.image,
     },
-    body: JSON.stringify({
-      model,
-      max_tokens: 1000,
-      system: systemPrompt,
-      messages,
-    }),
   });
 
-  const data = await response.json();
-  const reply: string =
-    data?.content?.[0]?.text ??
-    data?.error?.message ??
-    "عذراً، حدث خطأ.";
+  if (error) {
+    throw new Error(error.message);
+  }
 
-  if (!response.ok) {
-    throw new Error(reply);
+  const response = (data ?? {}) as Record<string, unknown>;
+  const ok = Boolean(response.ok);
+  if (!ok) {
+    const code = String(response.code ?? "");
+    const errorText = String(response.error ?? "تعذر إكمال الطلب.");
+    throw new Error(code ? `${code}: ${errorText}` : errorText);
   }
 
   await recordCustomerTurn(payload);
 
   return {
-    conversationId: payload.conversationId ?? "",
-    reply,
-    recommendations: [],
-    diagnosis: "",
-    layoutSuggestion: "",
-    maintenancePlan: [],
-    requestedProducts: [],
-    estimatedProductsCostQar: 0,
-    usage: null,
+    conversationId: String(response.conversation_id ?? payload.conversationId ?? ""),
+    reply: String(response.reply ?? ""),
+    recommendations: Array.isArray(response.recommendations)
+      ? (response.recommendations as AiRecommendation[])
+      : [],
+    diagnosis: String(response.diagnosis ?? ""),
+    layoutSuggestion: String(response.layout_suggestion ?? ""),
+    maintenancePlan: Array.isArray(response.maintenance_plan)
+      ? (response.maintenance_plan as string[])
+      : [],
+    requestedProducts: Array.isArray(response.requested_products)
+      ? (response.requested_products as Array<{ product_name: string; description?: string }>)
+      : [],
+    estimatedProductsCostQar: Number(response.estimated_products_cost_qr ?? 0),
+    usage: (response.usage as AiUsage | null) ?? null,
   };
 }
 

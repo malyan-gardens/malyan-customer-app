@@ -101,16 +101,12 @@ export default function ProfileScreen() {
           <Row
             icon="bag-handle-outline"
             label="طلباتي"
-            onPress={() =>
-              Alert.alert("قريباً", "سيتم ربط الطلبات بجدول orders في Supabase.")
-            }
+            onPress={() => router.push("/my-orders" as never)}
           />
           <Row
             icon="calendar-outline"
             label="مواعيدي"
-            onPress={() =>
-              Alert.alert("قريباً", "سيتم ربط المواعيد بجدول appointments.")
-            }
+            onPress={() => router.push("/my-appointments" as never)}
           />
           <Row
             icon="notifications-outline"

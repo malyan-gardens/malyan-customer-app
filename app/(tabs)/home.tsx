@@ -4,7 +4,6 @@ import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Dimensions,
   FlatList,
   Image,
   Linking,
@@ -16,6 +15,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -28,14 +28,10 @@ import type { InventoryRow } from "../../lib/types";
 import { useAuthStore } from "../../lib/authStore";
 import { useCartStore } from "../../store/cartStore";
 
-const { width: SCREEN_W } = Dimensions.get("window");
 const GRID_GAP = 12;
 const GRID_H_PAD = spacing.md;
-const COL_WIDTH = (SCREEN_W - GRID_H_PAD * 2 - GRID_GAP) / 2;
-const PRODUCT_IMAGE_H = 180;
+const PRODUCT_IMAGE_H = 150;
 const BANNER_H = 220;
-
-const HERO_W = SCREEN_W;
 type BannerSlide = {
   key: string;
   title: string;
@@ -84,8 +80,41 @@ const QUICK_STATS = [
 
 const BRAND_BORDER_44 = `${colors.brand}44`;
 
+function productImages(item: InventoryRow): string[] {
+  const fallback = item.image_url ? [item.image_url] : [];
+  const raw = (item as InventoryRow & { image_urls?: unknown }).image_urls;
+  if (!raw) return fallback;
+  if (Array.isArray(raw)) {
+    const parsed = (raw as unknown[])
+      .map((v: unknown) => String(v ?? "").trim())
+      .filter((v: string) => /^https?:\/\//.test(v));
+    return parsed.length ? parsed : fallback;
+  }
+  if (typeof raw === "string") {
+    const value = raw.trim();
+    if (!value) return fallback;
+    try {
+      const parsedJson = JSON.parse(value);
+      if (Array.isArray(parsedJson)) {
+        const parsed = (parsedJson as unknown[])
+          .map((v: unknown) => String(v ?? "").trim())
+          .filter((v: string) => /^https?:\/\//.test(v));
+        if (parsed.length) return parsed;
+      }
+    } catch {
+      const parsed = value
+        .split(",")
+        .map((v) => v.trim())
+        .filter((v) => /^https?:\/\//.test(v));
+      if (parsed.length) return parsed;
+    }
+  }
+  return fallback;
+}
+
 export default function HomeScreen() {
   const router = useRouter();
+  const { width: screenWidth } = useWindowDimensions();
   const session = useAuthStore((s) => s.session);
   const isGuest = useAuthStore((s) => s.isGuest);
   const addItem = useCartStore((s) => s.addItem);
@@ -102,6 +131,10 @@ export default function HomeScreen() {
   const [search, setSearch] = useState("");
   const [heroIndex, setHeroIndex] = useState(0);
   const heroRef = useRef<ScrollView>(null);
+  const columns = screenWidth >= 900 ? 3 : 2;
+  const colWidth =
+    (screenWidth - GRID_H_PAD * 2 - GRID_GAP * (columns - 1)) / columns;
+  const heroWidth = screenWidth;
 
   const load = useCallback(async () => {
     setError(null);
@@ -143,12 +176,12 @@ export default function HomeScreen() {
     const t = setInterval(() => {
       setHeroIndex((prev) => {
         const next = (prev + 1) % bannerSlides.length;
-        heroRef.current?.scrollTo({ x: next * HERO_W, animated: true });
+        heroRef.current?.scrollTo({ x: next * heroWidth, animated: true });
         return next;
       });
     }, 3000);
     return () => clearInterval(t);
-  }, [bannerSlides.length]);
+  }, [bannerSlides.length, heroWidth]);
 
   const filteredFeatured = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -169,20 +202,26 @@ export default function HomeScreen() {
       const price = (item.selling_price ?? 0).toFixed(2);
       const maxQ = item.quantity;
       const isOutOfStock = (item.quantity ?? 0) === 0;
+      const images = productImages(item);
       return (
-        <View style={[styles.gridCell, { width: COL_WIDTH }]}>
+        <View style={[styles.gridCell, { width: colWidth }]}>
           <View style={styles.pCard}>
             <Pressable
               onPress={() => router.push(`/product/${item.id}`)}
               style={({ pressed }) => [styles.pCardPress, pressed && { opacity: 0.92 }]}
             >
               <View style={styles.pImageWrap}>
-                {item.image_url ? (
-                  <Image
-                    source={{ uri: item.image_url }}
-                    style={styles.pImage}
-                    resizeMode="cover"
-                  />
+                {images.length > 0 ? (
+                  <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false}>
+                    {images.map((img, idx) => (
+                      <Image
+                        key={`${img}-${idx}`}
+                        source={{ uri: img }}
+                        style={[styles.pImage, { width: colWidth }]}
+                        resizeMode="cover"
+                      />
+                    ))}
+                  </ScrollView>
                 ) : (
                   <LinearGradient
                     colors={[colors.surface, colors.bgElevated]}
@@ -194,6 +233,11 @@ export default function HomeScreen() {
                 {isOutOfStock ? (
                   <View style={styles.stockBadge}>
                     <Text style={styles.stockBadgeText}>نفدت الكمية</Text>
+                  </View>
+                ) : null}
+                {images.length > 1 ? (
+                  <View style={styles.imageCountBadge}>
+                    <Text style={styles.imageCountBadgeText}>{images.length} صور</Text>
                   </View>
                 ) : null}
               </View>
@@ -266,7 +310,7 @@ export default function HomeScreen() {
         </View>
       );
     },
-    [addItem, isGuest, router]
+    [addItem, colWidth, isGuest, router]
   );
 
   const listFooter = useMemo(
@@ -343,7 +387,8 @@ export default function HomeScreen() {
       <FlatList
         data={filteredFeatured}
         keyExtractor={(item) => item.id}
-        numColumns={2}
+        numColumns={columns}
+        key={columns}
         showsVerticalScrollIndicator={false}
         columnWrapperStyle={styles.gridRow}
         contentContainerStyle={styles.gridListContent}
@@ -365,7 +410,7 @@ export default function HomeScreen() {
                 pagingEnabled
                 showsHorizontalScrollIndicator={false}
                 onMomentumScrollEnd={(e) => {
-                  const i = Math.round(e.nativeEvent.contentOffset.x / HERO_W);
+                  const i = Math.round(e.nativeEvent.contentOffset.x / heroWidth);
                   if (i >= 0 && i < bannerSlides.length) setHeroIndex(i);
                 }}
                 decelerationRate="fast"
@@ -377,7 +422,7 @@ export default function HomeScreen() {
                     colors={[...slide.colors]}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
-                    style={[styles.heroSlide, { width: HERO_W }]}
+                    style={[styles.heroSlide, { width: heroWidth }]}
                   >
                     <Text style={styles.heroTitle}>{slide.title}</Text>
                     <Text style={styles.heroSub}>{slide.sub}</Text>
@@ -785,7 +830,7 @@ const styles = StyleSheet.create({
   gridCell: {},
   pCard: {
     width: "100%",
-    minHeight: PRODUCT_IMAGE_H + 132,
+    minHeight: PRODUCT_IMAGE_H + 108,
     backgroundColor: colors.surface,
     borderRadius: radii.lg,
     overflow: "hidden",
@@ -800,6 +845,18 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgElevated,
     position: "relative",
   },
+  imageCountBadge: {
+    position: "absolute",
+    bottom: 8,
+    left: 8,
+    backgroundColor: colors.overlay,
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  imageCountBadgeText: { color: colors.white, fontSize: 10, fontWeight: "800" },
   stockBadge: {
     position: "absolute",
     top: 8,
@@ -822,15 +879,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   pBody: {
-    paddingHorizontal: 12,
-    paddingTop: 10,
+    paddingHorizontal: 10,
+    paddingTop: 8,
     paddingBottom: 4,
     flexGrow: 1,
   },
   pTitle: {
     color: colors.white,
     fontWeight: "700",
-    fontSize: 14,
+    fontSize: 13,
     textAlign: "right",
     lineHeight: 20,
     minHeight: 40,
@@ -839,36 +896,36 @@ const styles = StyleSheet.create({
   pPrice: {
     color: colors.gold,
     fontWeight: "800",
-    fontSize: 15,
+    fontSize: 14,
     textAlign: "right",
     marginTop: 6,
   },
   addMini: {
-    marginHorizontal: 12,
-    marginBottom: 8,
-    marginTop: 6,
+    marginHorizontal: 10,
+    marginBottom: 6,
+    marginTop: 4,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
     backgroundColor: colors.brand,
-    paddingVertical: 10,
+    paddingVertical: 8,
     borderRadius: radii.sm,
   },
-  addMiniText: { color: colors.white, fontWeight: "800", fontSize: 14 },
+  addMiniText: { color: colors.white, fontWeight: "800", fontSize: 12 },
   buyNowBtn: {
-    marginHorizontal: 12,
-    marginBottom: 12,
+    marginHorizontal: 10,
+    marginBottom: 10,
     marginTop: 2,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
     backgroundColor: colors.gold,
-    paddingVertical: 10,
+    paddingVertical: 8,
     borderRadius: radii.sm,
   },
-  buyNowText: { color: colors.bg, fontWeight: "800", fontSize: 14 },
+  buyNowText: { color: colors.bg, fontWeight: "800", fontSize: 12 },
   btnDisabled: { opacity: 0.5 },
   errorBox: {
     marginHorizontal: spacing.md,
