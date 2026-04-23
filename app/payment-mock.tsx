@@ -29,6 +29,7 @@ type InvoiceEmailRow = {
   invoice_number?: string | null;
   customer_name?: string | null;
   customer_email?: string | null;
+  customer_phone?: string | null;
   items?: unknown;
   total_amount?: number | null;
   payment_method?: string | null;
@@ -36,12 +37,26 @@ type InvoiceEmailRow = {
 };
 
 async function postSendInvoiceEmail(invoice: InvoiceEmailRow) {
-  const customerEmail = String(invoice.customer_email ?? "").trim();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  let customerEmail = "";
+  if (user?.email) {
+    customerEmail = user.email;
+  } else if (invoice.customer_phone) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("email")
+      .eq("phone", invoice.customer_phone)
+      .maybeSingle();
+    customerEmail = profile?.email ?? "";
+  }
+
   const res = await fetch(SEND_INVOICE_EMAIL_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      to: customerEmail,
+      to: customerEmail.trim(),
       invoiceNumber: invoice.invoice_number,
       customerName: invoice.customer_name,
       items: invoice.items,
