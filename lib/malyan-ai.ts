@@ -222,7 +222,8 @@ export async function invokeMalyanAi(payload: InvokeAiPayload): Promise<InvokeAi
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const resolvedUserId = payload.userId?.trim() || user?.id || "guest";
+  const resolvedUserId =
+    payload.userId?.trim() || user?.id || "00000000-0000-0000-0000-000000000000";
 
   const body = {
     message: payload.message,
