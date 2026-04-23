@@ -56,7 +56,7 @@ export default function PaymentMockScreen() {
 
     if (orderIdStr) {
       try {
-        // Online cart orders: mark paid (DB trigger creates invoice). No invoice/email here.
+        // Online cart orders: mark paid (DB trigger creates invoice). Invoice email: dashboard only.
         const orderId = orderIdStr;
         console.log("Updating orderId:", orderId, typeof orderId);
         const { error } = await supabase
