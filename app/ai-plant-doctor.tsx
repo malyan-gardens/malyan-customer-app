@@ -23,7 +23,6 @@ import {
   invokeMalyanAi,
   requestUnavailableProduct,
   type AiRecommendation,
-  type InvokeAiPayload,
 } from "../lib/malyan-ai";
 
 type Pref = "natural" | "artificial" | "mixed";
@@ -133,22 +132,27 @@ export default function AiPlantDoctorScreen() {
         data: { user },
       } = await supabase.auth.getUser();
 
-      const payload: InvokeAiPayload = {
+      if (!user?.id) {
+        throw new Error("Unauthorized");
+      }
+      const res = (await invokeMalyanAi({
         message:
           symptoms.trim() ||
           "أرجو تشخيص حالة النبات من الصورة واقتراح علاج مناسب لجو قطر.",
-        userId: user?.id,
+        userId: user.id,
         mode: "doctor",
-        preferences: { plant_nature: pref },
         image: selectedImageBase64
           ? { base64: selectedImageBase64, mediaType: "image/jpeg" }
           : undefined,
+      })) as {
+        diagnosis?: string;
+        reply?: string;
+        maintenance_plan?: string[];
+        recommendations?: AiRecommendation[];
       };
-
-      const res = await invokeMalyanAi(payload);
-      setDiagnosis(res.diagnosis || res.reply);
-      setMaintenance(res.maintenancePlan);
-      setRecommendations(res.recommendations);
+      setDiagnosis(String(res.diagnosis ?? res.reply ?? ""));
+      setMaintenance(Array.isArray(res.maintenance_plan) ? res.maintenance_plan : []);
+      setRecommendations(Array.isArray(res.recommendations) ? res.recommendations : []);
     } catch (e) {
       setError(e instanceof Error ? e.message : "تعذر التشخيص الآن.");
     } finally {

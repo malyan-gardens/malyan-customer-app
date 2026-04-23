@@ -24,7 +24,6 @@ import {
   requestUnavailableProduct,
   saveAiDesign,
   type AiRecommendation,
-  type InvokeAiPayload,
 } from "../lib/malyan-ai";
 
 type Pref = "natural" | "artificial" | "mixed";
@@ -141,22 +140,25 @@ export default function AiDesignWizardScreen() {
         throw new Error("Unauthorized");
       }
 
-      const payload: InvokeAiPayload = {
+      const res = (await invokeMalyanAi({
         message: prompt,
         userId: user.id,
         mode: "design",
-        preferences,
         image: selectedImageBase64
           ? { base64: selectedImageBase64, mediaType: "image/jpeg" }
           : undefined,
+      })) as {
+        reply?: string;
+        layout_suggestion?: string;
+        maintenance_plan?: string[];
+        recommendations?: AiRecommendation[];
+        estimated_products_cost_qr?: number;
       };
-
-      const res = await invokeMalyanAi(payload);
-      setReply(res.reply);
-      setLayout(res.layoutSuggestion);
-      setMaintenancePlan(res.maintenancePlan);
-      setRecommendations(res.recommendations);
-      setEstimatedCostQar(res.estimatedProductsCostQar);
+      setReply(String(res.reply ?? ""));
+      setLayout(String(res.layout_suggestion ?? ""));
+      setMaintenancePlan(Array.isArray(res.maintenance_plan) ? res.maintenance_plan : []);
+      setRecommendations(Array.isArray(res.recommendations) ? res.recommendations : []);
+      setEstimatedCostQar(Number(res.estimated_products_cost_qr ?? 0));
     } catch (e) {
       console.log("[ai-design-wizard] malyan-ai-chat error:", e);
       const rawMsg = e instanceof Error ? e.message : String(e);

@@ -29,37 +29,6 @@ function formatExpiry(raw: string) {
   return `${digits.slice(0, 2)}/${digits.slice(2)}`;
 }
 
-function buildInvoiceHtml(input: {
-  orderId: string;
-  customerName: string;
-  items: Array<{ name: string; quantity: number; lineTotal: number; currency?: string }>;
-  total: number;
-  paymentMethod: string;
-  address: string;
-}): string {
-  const rows = input.items
-    .map(
-      (i) =>
-        `<tr><td style="padding:8px;border:1px solid #ddd;">${i.name}</td><td style="padding:8px;border:1px solid #ddd;">${i.quantity}</td><td style="padding:8px;border:1px solid #ddd;">${i.lineTotal.toFixed(2)} ${i.currency ?? "QAR"}</td></tr>`
-    )
-    .join("");
-  return `
-    <div dir="rtl" style="font-family:Arial,sans-serif;line-height:1.8">
-      <h2>فاتورة طلبك من مليان للحدائق</h2>
-      <p><strong>رقم الطلب:</strong> ${input.orderId}</p>
-      <p><strong>العميل:</strong> ${input.customerName}</p>
-      <p><strong>العنوان:</strong> ${input.address || "—"}</p>
-      <p><strong>طريقة الدفع:</strong> ${input.paymentMethod}</p>
-      <table style="border-collapse:collapse;width:100%">
-        <thead><tr><th style="padding:8px;border:1px solid #ddd;">المنتج</th><th style="padding:8px;border:1px solid #ddd;">الكمية</th><th style="padding:8px;border:1px solid #ddd;">الإجمالي</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-      <p><strong>المجموع:</strong> ${input.total.toFixed(2)} QAR</p>
-      <p>شكراً لثقتكم بمليان للحدائق</p>
-    </div>
-  `;
-}
-
 export default function PaymentMockScreen() {
   const params = useLocalSearchParams<{
     amount?: string;
@@ -74,7 +43,6 @@ export default function PaymentMockScreen() {
   const [expiry, setExpiry] = useState("");
   const [cvv, setCvv] = useState("");
   const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
 
   const confirmPayment = async () => {
     console.log("DEBUG orderId:", params.orderId, "orderIdStr will be:", typeof params.orderId);
@@ -106,43 +74,6 @@ export default function PaymentMockScreen() {
         console.log("2. Order fetched:", ord?.id);
 
         const rawItems = Array.isArray(ord?.items) ? ord.items : [];
-        let customerEmail = "";
-        try {
-          const {
-            data: { user },
-          } = await supabase.auth.getUser();
-          customerEmail = user?.email ?? "";
-        } catch {
-          customerEmail = "";
-        }
-        try {
-          const htmlItems = rawItems.map((row: Record<string, unknown>) => ({
-            name: String(row.name ?? "منتج"),
-            quantity: Number(row.quantity ?? 1),
-            lineTotal: Number(row.lineTotal ?? 0),
-            currency: String(row.currency ?? "QAR"),
-          }));
-          await fetch("/api/send-invoice-email", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              to: customerEmail,
-              subject: "فاتورة طلبك من مليان للحدائق",
-              html: buildInvoiceHtml({
-                orderId: orderIdStr,
-                customerName: String(ord?.customer_name ?? ""),
-                items: htmlItems,
-                total: Number(ord?.total_amount ?? amount),
-                paymentMethod: "الدفع أونلاين",
-                address: String(ord?.address ?? ""),
-              }),
-            }),
-          });
-        } catch {
-          // silently skip if email fails
-        }
-        console.log("3. Email sent");
-
         for (const row of rawItems as Record<string, unknown>[]) {
           const productId = String(row.productId ?? "");
           if (!productId) continue;
@@ -174,48 +105,13 @@ export default function PaymentMockScreen() {
         });
         console.log("4. Notification inserted");
 
-        const today = new Date().toISOString().split("T")[0];
-        const { data: userData } = await supabase.auth.getUser();
-        const customerEmailForInvoice = userData?.user?.email ?? "";
-        const invoiceItems = (rawItems as Record<string, unknown>[]).map((item) => ({
-          description: String(item.name ?? "منتج"),
-          unit: "قطعة",
-          qty: Number(item.quantity ?? 1),
-          rate: Number(item.unitPrice ?? 0),
-          amount: Number(item.lineTotal ?? 0),
-        }));
-
-        try {
-        const fallbackInvoiceNumber = `MAL-${today.split("-")[0]}-${orderIdStr.replace(/-/g, "").slice(-4).toUpperCase()}`;
-          await supabase.from("invoices").insert({
-          order_id: orderIdStr,
-            reference_type: "order",
-          invoice_number: fallbackInvoiceNumber,
-            customer_name: String(ord?.customer_name ?? ""),
-            customer_email: customerEmailForInvoice,
-            customer_phone: String(ord?.customer_phone ?? ""),
-            customer_address: String(ord?.address ?? "الدوحة، قطر"),
-            items: invoiceItems,
-            subtotal: Number(ord?.total_amount ?? amount),
-            discount: 0,
-            previous_payments: 0,
-            partial_payment: 0,
-            total_amount: Number(ord?.total_amount ?? amount),
-            payment_method: "دفع إلكتروني",
-            payment_status: "paid",
-            issued_date: today,
-            due_date: today,
-            notes: `طلب رقم: ${orderIdStr}`,
-          });
-          console.log("6. Invoice created");
-        } catch (invErr) {
-          console.error("Invoice creation failed:", invErr);
-        }
-
         console.log("5. About to navigate to order-success");
         useCartStore.getState().clear();
         useCheckoutDraftStore.getState().reset();
-        router.replace(`/official-receipt?orderId=${encodeURIComponent(orderIdStr)}` as never);
+        router.replace({
+          pathname: "/order-success",
+          params: { orderId: orderIdStr, total: String(Number(ord?.total_amount ?? amount)) },
+        });
         return;
       } catch (e) {
         console.error("PATH A ERROR:", e instanceof Error ? e.message : JSON.stringify(e));
@@ -223,80 +119,6 @@ export default function PaymentMockScreen() {
         setLoading(false);
       }
       return;
-    }
-
-    let nextUserName = "عميل مليان";
-    let nextUserEmail = "";
-    const today = new Date().toISOString().split("T")[0];
-
-    try {
-      const { data: userData } = await supabase.auth.getUser();
-      const user = userData.user;
-      const metadata = (user?.user_metadata ?? {}) as Record<string, unknown>;
-      nextUserName =
-        (typeof metadata.full_name === "string" && metadata.full_name) ||
-        (typeof metadata.name === "string" && metadata.name) ||
-        user?.email ||
-        "عميل مليان";
-      nextUserEmail = user?.email ?? "";
-    } catch (e) {
-      console.log(e);
-    }
-
-    try {
-      const { data: invoiceData } = await supabase
-        .from("invoices")
-        .insert({
-          reference_type: "order",
-          invoice_number: "",
-          customer_name: nextUserName,
-          customer_email: nextUserEmail,
-          customer_phone: "",
-          customer_address: "Doha, Qatar",
-          items: [
-            {
-              description: service,
-              unit: "خدمة",
-              qty: 1,
-              rate: amount,
-              amount,
-            },
-          ],
-          subtotal: amount,
-          discount: 0,
-          previous_payments: 0,
-          partial_payment: 0,
-          total_amount: amount,
-          payment_method: "دفع إلكتروني",
-          payment_status: "paid",
-          issued_date: today,
-          due_date: today,
-          notes: "تم الدفع عبر بوابة QNB الإلكترونية",
-        })
-        .select("invoice_number")
-        .single();
-      try {
-        await fetch("/api/send-invoice-email", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            to: nextUserEmail,
-            subject: "فاتورة طلبك من مليان للحدائق",
-            html: buildInvoiceHtml({
-              orderId: String(invoiceData?.invoice_number ?? "direct"),
-              customerName: nextUserName,
-              items: [{ name: service, quantity: 1, lineTotal: amount, currency: "QAR" }],
-              total: amount,
-              paymentMethod: "الدفع أونلاين",
-              address: "Doha, Qatar",
-            }),
-          }),
-        });
-      } catch {
-        // silently skip if email fails
-      }
-    } catch (e) {
-      console.log(e);
     }
 
     try {
@@ -310,39 +132,14 @@ export default function PaymentMockScreen() {
       console.log(e);
     }
 
-    setSuccess(true);
-    setLoading(false);
     useCartStore.getState().clear();
     useCheckoutDraftStore.getState().reset();
+    setLoading(false);
+    router.replace({
+      pathname: "/order-success",
+      params: { total: String(amount) },
+    });
     return;
-  }
-
-  if (success) {
-    return (
-      <SafeAreaView style={styles.screen}>
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 24 }}>
-          <Ionicons name="checkmark-circle" size={80} color="#16a34a" />
-          <Text style={{ color: "#fff", fontSize: 22, fontWeight: "800", marginTop: 16, textAlign: "center" }}>
-            تم الدفع بنجاح! ✅
-          </Text>
-          <Text style={{ color: "#c9a84c", fontSize: 18, fontWeight: "700", marginTop: 8 }}>
-            {amount} QAR
-          </Text>
-          <Pressable
-            style={{
-              marginTop: 32,
-              backgroundColor: "#1a7a3c",
-              paddingVertical: 14,
-              paddingHorizontal: 32,
-              borderRadius: 12,
-            }}
-            onPress={() => router.replace("/(tabs)/home")}
-          >
-            <Text style={{ color: "#fff", fontWeight: "800", fontSize: 16 }}>العودة للرئيسية</Text>
-          </Pressable>
-        </View>
-      </SafeAreaView>
-    );
   }
 
   return (

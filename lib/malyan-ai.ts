@@ -1,4 +1,4 @@
-import { SUPABASE_ANON_KEY, SUPABASE_URL, supabase } from "./supabase";
+import { supabase } from "./supabase";
 
 export type ChatRole = "user" | "assistant";
 
@@ -218,81 +218,35 @@ async function recordCustomerTurn(payload: InvokeAiPayload): Promise<void> {
   }
 }
 
-export async function invokeMalyanAi(payload: InvokeAiPayload): Promise<InvokeAiResult> {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const resolvedUserId =
-    payload.userId?.trim() || user?.id || "00000000-0000-0000-0000-000000000000";
+export async function invokeMalyanAi({
+  message,
+  userId,
+  history = [],
+  mode,
+  image,
+  conversationId,
+}: {
+  message: string;
+  userId: string;
+  history?: Array<{ role: string; content: string }>;
+  mode?: string;
+  image?: { base64?: string; mediaType?: string };
+  conversationId?: string;
+}) {
+  const { data, error } = await supabase.functions.invoke("malyan-ai-chat", {
+    body: {
+      message,
+      userId,
+      conversationHistory: history,
+      history,
+      mode,
+      image,
+      conversationId,
+    },
+  });
 
-  const body = {
-    message: payload.message,
-    userId: resolvedUserId,
-    conversationId: payload.conversationId,
-    history: payload.history,
-    conversationHistory: payload.history,
-    mode: payload.mode ?? "chat",
-    preferences: payload.preferences ?? {},
-    image: payload.image,
-  };
-  const edgeUrl = `${SUPABASE_URL}/functions/v1/malyan-ai-chat`;
-
-  const invokeOnce = async (): Promise<Record<string, unknown>> => {
-    const res = await fetch(edgeUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: SUPABASE_ANON_KEY,
-      },
-      body: JSON.stringify(body),
-    });
-    const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-    if (!res.ok || json.ok === false) {
-      const code = String(json.code ?? "");
-      const err = String(json.error ?? "AI_UNAVAILABLE");
-      throw new Error(code ? `${code}: ${err}` : err);
-    }
-    return json;
-  };
-
-  let response: Record<string, unknown>;
-  try {
-    response = await invokeOnce();
-  } catch (firstError) {
-    const firstText = firstError instanceof Error ? firstError.message : String(firstError);
-    const isDailyLimit =
-      firstText.includes("DAILY_MESSAGES_EXCEEDED") ||
-      firstText.includes("DAILY_BUDGET_EXCEEDED");
-    if (isDailyLimit) {
-      throw new Error(firstText);
-    }
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    try {
-      response = await invokeOnce();
-    } catch {
-      throw new Error("عذراً، مليان الذكي غير متاح حالياً");
-    }
-  }
-
-  await recordCustomerTurn(payload);
-
-  return {
-    conversationId: String(response.conversation_id ?? payload.conversationId ?? ""),
-    reply: String(response.reply ?? ""),
-    recommendations: Array.isArray(response.recommendations)
-      ? (response.recommendations as AiRecommendation[])
-      : [],
-    diagnosis: String(response.diagnosis ?? ""),
-    layoutSuggestion: String(response.layout_suggestion ?? ""),
-    maintenancePlan: Array.isArray(response.maintenance_plan)
-      ? (response.maintenance_plan as string[])
-      : [],
-    requestedProducts: Array.isArray(response.requested_products)
-      ? (response.requested_products as Array<{ product_name: string; description?: string }>)
-      : [],
-    estimatedProductsCostQar: Number(response.estimated_products_cost_qr ?? 0),
-    usage: (response.usage as AiUsage | null) ?? null,
-  };
+  if (error) throw new Error("عذراً، مليان الذكي غير متاح حالياً");
+  return data;
 }
 
 export async function getLatestConversation(

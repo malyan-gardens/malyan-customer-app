@@ -388,20 +388,28 @@ export default function MalyanAiScreen() {
             }
           : undefined,
       });
+      const normalized = {
+        conversationId: String((res as { conversation_id?: string }).conversation_id ?? ""),
+        reply: String((res as { reply?: string }).reply ?? ""),
+        recommendations: Array.isArray((res as { recommendations?: unknown[] }).recommendations)
+          ? ((res as { recommendations?: AiRecommendation[] }).recommendations ?? [])
+          : [],
+        usage: ((res as { usage?: AiUsage }).usage ?? null) as AiUsage | null,
+      };
 
-      setConversationId(res.conversationId);
+      setConversationId(normalized.conversationId);
 
       const assistantMsg: ChatUiMessage = {
         id: `a-${Date.now()}`,
         role: "assistant",
-        content: res.reply,
+        content: normalized.reply,
         createdAt: new Date().toISOString(),
-        recommendations: res.recommendations,
-        usage: res.usage ?? undefined,
+        recommendations: normalized.recommendations,
+        usage: normalized.usage ?? undefined,
       };
 
       setMessages((prev) => [...prev, assistantMsg]);
-      if (res.usage) setUsage(res.usage);
+      if (normalized.usage) setUsage(normalized.usage);
       setSelectedImageBase64(null);
     } catch (e) {
       // Requested deep debug logging for function invocation failures.
