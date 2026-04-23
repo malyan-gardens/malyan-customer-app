@@ -219,11 +219,17 @@ async function recordCustomerTurn(payload: InvokeAiPayload): Promise<void> {
 }
 
 export async function invokeMalyanAi(payload: InvokeAiPayload): Promise<InvokeAiResult> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const resolvedUserId = payload.userId?.trim() || user?.id || "guest";
+
   const body = {
     message: payload.message,
-    userId: payload.userId,
+    userId: resolvedUserId,
     conversationId: payload.conversationId,
     history: payload.history,
+    conversationHistory: payload.history,
     mode: payload.mode ?? "chat",
     preferences: payload.preferences ?? {},
     image: payload.image,
