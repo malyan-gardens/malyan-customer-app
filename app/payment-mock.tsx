@@ -17,14 +17,14 @@ import { useCheckoutDraftStore } from "../store/checkoutDraftStore";
 const QNB_BLUE = "#003f7f";
 const font = Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined });
 
-const SEND_INVOICE_EMAIL_URL = "https://app.malyangardens.com/api/send-invoice-email";
+const SEND_INVOICE_EMAIL_URL = "https://malyan-customer-app.vercel.app/api/send-invoice-email";
 const INVOICE_FETCH_DELAY_MS = 3000;
 
 function waitMs(ms: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, ms));
 }
 
-/** Invoice row from Supabase `invoices` (snake_case). Dashboard API expects camelCase in JSON body — see app.malyangardens.com/api/send-invoice-email (not in this repo). */
+/** Invoice row from Supabase `invoices` (snake_case). API expects camelCase in JSON body — see malyan-customer-app.vercel.app/api/send-invoice-email. */
 type InvoiceEmailRow = {
   invoice_number?: string | null;
   customer_name?: string | null;
