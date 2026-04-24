@@ -41,9 +41,7 @@ type ModelResult = {
 type CatalogItem = {
   id: string;
   name_ar: string | null;
-  description: string | null;
   selling_price: number | null;
-  currency: string | null;
   image_url: string | null;
   category: string | null;
   quantity: number | null;
@@ -51,7 +49,7 @@ type CatalogItem = {
 
 const DAILY_MESSAGE_LIMIT = 20;
 const DAILY_COST_LIMIT_USD = 0.1;
-const CHAT_MODEL = "claude-haiku-3-5-20251001";
+const CHAT_MODEL = "claude-haiku-4-5-20251001";
 const IMAGE_MODEL = "claude-sonnet-4-6";
 
 const SYSTEM_PROMPT = `You are مليان الذكي, an expert garden and landscape consultant for Malyan Gardens in Qatar.
@@ -228,7 +226,7 @@ Deno.serve(async (req) => {
 
     const { data: catalogRows, error: catalogErr } = await adminClient
       .from("inventory")
-      .select("id,name_ar,description,selling_price,currency,image_url,category,quantity")
+      .select("id, name_ar, selling_price, image_url, category, quantity")
       .gt("quantity", 0)
       .order("quantity", { ascending: false })
       .limit(200);
@@ -241,9 +239,7 @@ Deno.serve(async (req) => {
     .slice(0, 40)
     .map(
       (p) =>
-        `- ${p.name_ar ?? "منتج"} | category=${p.category ?? "عام"} | price=${p.selling_price ?? 0} ${
-          p.currency ?? "QAR"
-        }`
+        `- ${p.name_ar ?? "منتج"} | category=${p.category ?? "عام"} | price=${p.selling_price ?? 0} QAR`
     )
     .join("\n");
 
@@ -333,7 +329,7 @@ Deno.serve(async (req) => {
 
     const { data: exactMatches } = await adminClient
       .from("inventory")
-      .select("id,name_ar,description,selling_price,currency,image_url,category,quantity")
+      .select("id, name_ar, selling_price, image_url, category, quantity")
       .ilike("name_ar", `%${rec.product_name}%`)
       .gt("quantity", 0)
       .order("quantity", { ascending: false })
@@ -357,10 +353,8 @@ Deno.serve(async (req) => {
       for (const kw of keywords) {
         const { data: alternatives } = await adminClient
           .from("inventory")
-          .select("id,name_ar,description,selling_price,currency,image_url,category,quantity")
-          .or(
-            `category.ilike.%${kw}%,description.ilike.%${kw}%,name_ar.ilike.%${kw}%`
-          )
+          .select("id, name_ar, selling_price, image_url, category, quantity")
+          .or(`category.ilike.%${kw}%,name_ar.ilike.%${kw}%`)
           .gt("quantity", 0)
           .order("quantity", { ascending: false })
           .limit(1);
@@ -378,11 +372,9 @@ Deno.serve(async (req) => {
         if (firstToken) {
           const { data: alternatives } = await adminClient
             .from("inventory")
-            .select("id,name_ar,description,selling_price,currency,image_url,category,quantity")
+            .select("id, name_ar, selling_price, image_url, category, quantity")
             .ilike("name_ar", `%${firstToken}%`)
-            .or(
-              `description.ilike.%${firstToken}%,category.ilike.%${firstToken}%`
-            )
+            .or(`category.ilike.%${firstToken}%,name_ar.ilike.%${firstToken}%`)
             .gt("quantity", 0)
             .order("quantity", { ascending: false })
             .limit(1);

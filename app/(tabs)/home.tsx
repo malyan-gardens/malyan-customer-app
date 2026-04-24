@@ -24,13 +24,15 @@ import { MalyanLogo } from "../../components/MalyanLogo";
 import { getActivePromotions, heroPromotionBadge } from "../../lib/promotions";
 import { supabase } from "../../lib/supabase";
 import { colors, radii, shadows, spacing } from "../../lib/theme";
-import type { InventoryRow } from "../../lib/types";
+import { getProductImageUrls, shuffleArray } from "../../lib/catalogUi";
+import type { InventoryRow, ProductTypeRow } from "../../lib/types";
 import { useAuthStore } from "../../lib/authStore";
 import { useCartStore } from "../../store/cartStore";
 
 const GRID_GAP = 12;
 const GRID_H_PAD = spacing.md;
-const PRODUCT_IMAGE_H = 150;
+const PRODUCT_COLUMNS = 2;
+const PRODUCT_IMAGE_H = 120;
 const BANNER_H = 220;
 type BannerSlide = {
   key: string;
@@ -80,36 +82,19 @@ const QUICK_STATS = [
 
 const BRAND_BORDER_44 = `${colors.brand}44`;
 
-function productImages(item: InventoryRow): string[] {
-  const fallback = item.image_url ? [item.image_url] : [];
-  const raw = (item as InventoryRow & { image_urls?: unknown }).image_urls;
-  if (!raw) return fallback;
-  if (Array.isArray(raw)) {
-    const parsed = (raw as unknown[])
-      .map((v: unknown) => String(v ?? "").trim())
-      .filter((v: string) => /^https?:\/\//.test(v));
-    return parsed.length ? parsed : fallback;
+function ProductTypeIcon({ icon, size }: { icon: string | null; size: number }) {
+  const raw = (icon ?? "").trim();
+  if (/^https?:\/\//i.test(raw)) {
+    return (
+      <Image
+        source={{ uri: raw }}
+        style={{ width: size, height: size }}
+        resizeMode="contain"
+      />
+    );
   }
-  if (typeof raw === "string") {
-    const value = raw.trim();
-    if (!value) return fallback;
-    try {
-      const parsedJson = JSON.parse(value);
-      if (Array.isArray(parsedJson)) {
-        const parsed = (parsedJson as unknown[])
-          .map((v: unknown) => String(v ?? "").trim())
-          .filter((v: string) => /^https?:\/\//.test(v));
-        if (parsed.length) return parsed;
-      }
-    } catch {
-      const parsed = value
-        .split(",")
-        .map((v) => v.trim())
-        .filter((v) => /^https?:\/\//.test(v));
-      if (parsed.length) return parsed;
-    }
-  }
-  return fallback;
+  const ionName = raw.length > 0 && /^[a-z0-9-]+$/i.test(raw) ? raw : "leaf";
+  return <Ionicons name={ionName as never} size={size} color={colors.gold} />;
 }
 
 export default function HomeScreen() {
@@ -123,31 +108,35 @@ export default function HomeScreen() {
   );
 
   const [showGuestModal, setShowGuestModal] = useState(false);
-  const [items, setItems] = useState<InventoryRow[]>([]);
+  const [productTypes, setProductTypes] = useState<ProductTypeRow[]>([]);
+  const [selectedTypeId, setSelectedTypeId] = useState<string | null>(null);
+  const [typeProducts, setTypeProducts] = useState<InventoryRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingProducts, setLoadingProducts] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [promotions, setPromotions] = useState<BannerSlide[]>([]);
   const [search, setSearch] = useState("");
   const [heroIndex, setHeroIndex] = useState(0);
   const heroRef = useRef<ScrollView>(null);
-  const columns = screenWidth >= 768 ? 3 : 2;
   const colWidth =
-    (screenWidth - GRID_H_PAD * 2 - GRID_GAP * (columns - 1)) / columns;
+    (screenWidth - GRID_H_PAD * 2 - GRID_GAP * (PRODUCT_COLUMNS - 1)) /
+    PRODUCT_COLUMNS;
+  const typeColWidth = colWidth;
   const heroWidth = screenWidth;
 
-  const load = useCallback(async () => {
+  const loadTypesAndPromos = useCallback(async () => {
     setError(null);
-    const { data, error: qErr } = await supabase
-      .from("inventory")
-      .select("*")
+    const { data: typesData, error: typesErr } = await supabase
+      .from("product_types")
+      .select("id, name_ar, icon")
       .order("name_ar", { ascending: true });
 
-    if (qErr) {
-      setError(qErr.message);
-      setItems([]);
+    if (typesErr) {
+      setError(typesErr.message);
+      setProductTypes([]);
     } else {
-      setItems((data as InventoryRow[]) ?? []);
+      setProductTypes((typesData as ProductTypeRow[]) ?? []);
     }
 
     const promoList = await getActivePromotions();
@@ -165,9 +154,34 @@ export default function HomeScreen() {
     setRefreshing(false);
   }, []);
 
+  const loadProductsForType = useCallback(async (typeId: string, opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setLoadingProducts(true);
+    setError(null);
+    const { data, error: qErr } = await supabase
+      .from("inventory")
+      .select("*")
+      .eq("product_type_id", typeId)
+      .gt("quantity", 0);
+    if (qErr) {
+      setError(qErr.message);
+      setTypeProducts([]);
+    } else {
+      setTypeProducts(shuffleArray((data as InventoryRow[]) ?? []));
+    }
+    if (!opts?.silent) setLoadingProducts(false);
+  }, []);
+
   useEffect(() => {
-    load();
-  }, [load]);
+    void loadTypesAndPromos();
+  }, [loadTypesAndPromos]);
+
+  useEffect(() => {
+    if (!selectedTypeId) {
+      setTypeProducts([]);
+      return;
+    }
+    void loadProductsForType(selectedTypeId);
+  }, [selectedTypeId, loadProductsForType]);
 
   const bannerSlides = promotions.length > 0 ? promotions : DEFAULT_BANNERS;
 
@@ -183,18 +197,29 @@ export default function HomeScreen() {
     return () => clearInterval(t);
   }, [bannerSlides.length, heroWidth]);
 
-  const filteredFeatured = useMemo(() => {
+  const filteredTypes = useMemo(() => {
     const q = search.trim().toLowerCase();
-    let list = items;
+    if (!q) return productTypes;
+    return productTypes.filter((t) => (t.name_ar ?? "").toLowerCase().includes(q));
+  }, [productTypes, search]);
+
+  const filteredTypeProducts = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    let list = typeProducts;
     if (q) {
-      list = items.filter((row) => {
+      list = typeProducts.filter((row) => {
         const name = (row.name_ar ?? "").toLowerCase();
         const desc = (row.description ?? "").toLowerCase();
         return name.includes(q) || desc.includes(q);
       });
     }
-    return list.slice(0, 12);
-  }, [items, search]);
+    return list;
+  }, [typeProducts, search]);
+
+  const selectedTypeLabel = useMemo(() => {
+    if (!selectedTypeId) return "";
+    return productTypes.find((t) => t.id === selectedTypeId)?.name_ar ?? "المنتجات";
+  }, [productTypes, selectedTypeId]);
 
   const renderProduct: ListRenderItem<InventoryRow> = useCallback(
     ({ item }) => {
@@ -202,7 +227,7 @@ export default function HomeScreen() {
       const price = (item.selling_price ?? 0).toFixed(2);
       const maxQ = item.quantity;
       const isOutOfStock = (item.quantity ?? 0) === 0;
-      const images = productImages(item);
+      const images = getProductImageUrls(item);
       return (
         <View style={[styles.gridCell, { width: colWidth }]}>
           <View style={styles.pCard}>
@@ -350,6 +375,178 @@ export default function HomeScreen() {
     );
   }
 
+  const typesBrowseHeader = (
+    <>
+      <View style={styles.heroWrap}>
+        <ScrollView
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          onMomentumScrollEnd={(e) => {
+            const i = Math.round(e.nativeEvent.contentOffset.x / heroWidth);
+            if (i >= 0 && i < bannerSlides.length) setHeroIndex(i);
+          }}
+          decelerationRate="fast"
+          ref={heroRef}
+        >
+          {bannerSlides.map((slide) => (
+            <LinearGradient
+              key={slide.key}
+              colors={[...slide.colors]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={[styles.heroSlide, { width: heroWidth }]}
+            >
+              <Text style={styles.heroTitle}>{slide.title}</Text>
+              <Text style={styles.heroSub}>{slide.sub}</Text>
+              {slide.typeBadge ? (
+                <View style={styles.heroTypeBadge}>
+                  <Text style={styles.heroTypeBadgeText}>{slide.typeBadge}</Text>
+                </View>
+              ) : null}
+              {slide.endDate ? (
+                <Text style={styles.heroEndDate}>ينتهي في: {slide.endDate}</Text>
+              ) : null}
+              <Pressable
+                onPress={() => {
+                  setSelectedTypeId(null);
+                  setSearch("");
+                }}
+                style={({ pressed }) => [styles.heroCta, pressed && { opacity: 0.92 }]}
+              >
+                <Text style={styles.heroCtaText}>اكتشف الآن</Text>
+              </Pressable>
+            </LinearGradient>
+          ))}
+        </ScrollView>
+        <View style={styles.dots}>
+          {bannerSlides.map((s, i) => (
+            <View key={s.key} style={[styles.dot, i === heroIndex && styles.dotActive]} />
+          ))}
+        </View>
+      </View>
+
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.statsScroll}
+      >
+        {QUICK_STATS.map((s) => (
+          <View key={s.key} style={styles.statPill}>
+            <Text style={styles.statPillText}>{s.label}</Text>
+          </View>
+        ))}
+      </ScrollView>
+
+      <View style={styles.searchRow}>
+        <Pressable style={styles.filterBtn} onPress={() => router.push("/plants")}>
+          <Ionicons name="options-outline" size={22} color={colors.gold} />
+        </Pressable>
+        <View style={styles.searchInner}>
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder="بحث عن نوع…"
+            placeholderTextColor={colors.textMuted}
+            style={styles.searchInput}
+          />
+          <Ionicons name="search" size={20} color={colors.textMuted} />
+        </View>
+      </View>
+
+      <Text style={styles.sectionTitle}>التصنيفات</Text>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.catScroll}
+      >
+        {CATEGORIES.map((c) => (
+          <Pressable
+            key={c.key}
+            onPress={() => router.push(c.href)}
+            style={({ pressed }) => [pressed && { opacity: 0.92 }]}
+          >
+            <LinearGradient
+              colors={[colors.surface, colors.bgElevated]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.catCard}
+            >
+              <Text style={styles.catEmoji}>{c.emoji}</Text>
+              <Text style={styles.catLabel}>{c.label}</Text>
+            </LinearGradient>
+          </Pressable>
+        ))}
+      </ScrollView>
+
+      <Pressable
+        onPress={() => {
+          if (isGuest) {
+            setShowGuestModal(true);
+            return;
+          }
+          if (session) {
+            router.push("/malyan-ai" as never);
+          }
+        }}
+        style={({ pressed }) => [styles.aiBanner, pressed && { opacity: 0.95 }]}
+      >
+        <LinearGradient
+          colors={["#0d3d22", "#1a7a3c", "#063015"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.aiBannerGrad}
+        >
+          <Ionicons name="sparkles" size={32} color={colors.gold} />
+          <View style={styles.aiBannerTextWrap}>
+            <Text style={styles.aiBannerTitle}>مليان الذكي 🤖</Text>
+            <Text style={styles.aiBannerSub}>استشر مساعدنا في النباتات والتصميم</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={22} color={colors.gold} />
+        </LinearGradient>
+      </Pressable>
+
+      <View style={styles.sectionHead}>
+        <Text style={styles.sectionTitle}>أنواع المنتجات</Text>
+        <Pressable onPress={() => router.push("/plants")}>
+          <Text style={styles.seeAll}>الكل</Text>
+        </Pressable>
+      </View>
+    </>
+  );
+
+  const productsListHeader = (
+    <>
+      <View style={styles.searchRow}>
+        <Pressable style={styles.filterBtn} onPress={() => router.push("/plants")}>
+          <Ionicons name="options-outline" size={22} color={colors.gold} />
+        </Pressable>
+        <View style={styles.searchInner}>
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder="بحث في المنتجات…"
+            placeholderTextColor={colors.textMuted}
+            style={styles.searchInput}
+          />
+          <Ionicons name="search" size={20} color={colors.textMuted} />
+        </View>
+      </View>
+      <Pressable
+        style={styles.typeBackRow}
+        onPress={() => {
+          setSelectedTypeId(null);
+          setSearch("");
+        }}
+      >
+        <Ionicons name="chevron-back" size={22} color={colors.gold} />
+        <Text style={styles.typeBackTitle} numberOfLines={1}>
+          {selectedTypeLabel}
+        </Text>
+      </Pressable>
+    </>
+  );
+
   return (
     <SafeAreaView style={styles.screen} edges={["top"]}>
       <GuestModal
@@ -384,184 +581,118 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      <FlatList
-        data={filteredFeatured}
-        keyExtractor={(item) => item.id}
-        numColumns={columns}
-        key={columns}
-        showsVerticalScrollIndicator={false}
-        columnWrapperStyle={styles.gridRow}
-        contentContainerStyle={styles.gridListContent}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => {
-              setRefreshing(true);
-              load();
-            }}
-            tintColor={colors.gold}
-          />
-        }
-        ListHeaderComponent={
-          <>
-            <View style={styles.heroWrap}>
-              <ScrollView
-                horizontal
-                pagingEnabled
-                showsHorizontalScrollIndicator={false}
-                onMomentumScrollEnd={(e) => {
-                  const i = Math.round(e.nativeEvent.contentOffset.x / heroWidth);
-                  if (i >= 0 && i < bannerSlides.length) setHeroIndex(i);
-                }}
-                decelerationRate="fast"
-                ref={heroRef}
-              >
-                {bannerSlides.map((slide) => (
-                  <LinearGradient
-                    key={slide.key}
-                    colors={[...slide.colors]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={[styles.heroSlide, { width: heroWidth }]}
-                  >
-                    <Text style={styles.heroTitle}>{slide.title}</Text>
-                    <Text style={styles.heroSub}>{slide.sub}</Text>
-                    {slide.typeBadge ? (
-                      <View style={styles.heroTypeBadge}>
-                        <Text style={styles.heroTypeBadgeText}>{slide.typeBadge}</Text>
-                      </View>
-                    ) : null}
-                    {slide.endDate ? (
-                      <Text style={styles.heroEndDate}>ينتهي في: {slide.endDate}</Text>
-                    ) : null}
-                    <Pressable
-                      onPress={() => router.push("/plants")}
-                      style={({ pressed }) => [styles.heroCta, pressed && { opacity: 0.92 }]}
-                    >
-                      <Text style={styles.heroCtaText}>اكتشف الآن</Text>
-                    </Pressable>
-                  </LinearGradient>
-                ))}
-              </ScrollView>
-              <View style={styles.dots}>
-                {bannerSlides.map((s, i) => (
-                  <View key={s.key} style={[styles.dot, i === heroIndex && styles.dotActive]} />
-                ))}
-              </View>
-            </View>
-
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.statsScroll}
-            >
-              {QUICK_STATS.map((s) => (
-                <View key={s.key} style={styles.statPill}>
-                  <Text style={styles.statPillText}>{s.label}</Text>
-                </View>
-              ))}
-            </ScrollView>
-
-            <View style={styles.searchRow}>
-              <Pressable style={styles.filterBtn} onPress={() => router.push("/plants")}>
-                <Ionicons name="options-outline" size={22} color={colors.gold} />
-              </Pressable>
-              <View style={styles.searchInner}>
-                <TextInput
-                  value={search}
-                  onChangeText={setSearch}
-                  placeholder="بحث عن منتج…"
-                  placeholderTextColor={colors.textMuted}
-                  style={styles.searchInput}
-                />
-                <Ionicons name="search" size={20} color={colors.textMuted} />
-              </View>
-            </View>
-
-            <Text style={styles.sectionTitle}>التصنيفات</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.catScroll}
-            >
-              {CATEGORIES.map((c) => (
-                <Pressable
-                  key={c.key}
-                  onPress={() => router.push(c.href)}
-                  style={({ pressed }) => [pressed && { opacity: 0.92 }]}
-                >
-                  <LinearGradient
-                    colors={[colors.surface, colors.bgElevated]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.catCard}
-                  >
-                    <Text style={styles.catEmoji}>{c.emoji}</Text>
-                    <Text style={styles.catLabel}>{c.label}</Text>
-                  </LinearGradient>
-                </Pressable>
-              ))}
-            </ScrollView>
-
-            <Pressable
-              onPress={() => {
-                if (isGuest) {
-                  setShowGuestModal(true);
-                  return;
-                }
-                if (session) {
-                  router.push("/malyan-ai" as never);
-                }
+      {!selectedTypeId ? (
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.typesScrollContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => {
+                setRefreshing(true);
+                void loadTypesAndPromos();
               }}
-              style={({ pressed }) => [styles.aiBanner, pressed && { opacity: 0.95 }]}
-            >
-              <LinearGradient
-                colors={["#0d3d22", "#1a7a3c", "#063015"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.aiBannerGrad}
+              tintColor={colors.gold}
+            />
+          }
+        >
+          {typesBrowseHeader}
+          {error ? (
+            <View style={styles.errorBox}>
+              <Ionicons name="cloud-offline-outline" size={40} color={colors.textMuted} />
+              <Text style={styles.errorText}>{error}</Text>
+              <Pressable
+                style={styles.retry}
+                onPress={() => {
+                  setLoading(true);
+                  void loadTypesAndPromos();
+                }}
               >
-                <Ionicons name="sparkles" size={32} color={colors.gold} />
-                <View style={styles.aiBannerTextWrap}>
-                  <Text style={styles.aiBannerTitle}>مليان الذكي 🤖</Text>
-                  <Text style={styles.aiBannerSub}>
-                    استشر مساعدنا في النباتات والتصميم
-                  </Text>
-                </View>
-                <Ionicons name="chevron-forward" size={22} color={colors.gold} />
-              </LinearGradient>
-            </Pressable>
-
-            <View style={styles.sectionHead}>
-              <Text style={styles.sectionTitle}>منتجات مميزة</Text>
-              <Pressable onPress={() => router.push("/plants")}>
-                <Text style={styles.seeAll}>الكل</Text>
+                <Text style={styles.retryText}>إعادة المحاولة</Text>
               </Pressable>
             </View>
-
-            {error ? (
-              <View style={styles.errorBox}>
-                <Ionicons name="cloud-offline-outline" size={40} color={colors.textMuted} />
-                <Text style={styles.errorText}>{error}</Text>
-                <Pressable
-                  style={styles.retry}
-                  onPress={() => {
-                    setLoading(true);
-                    load();
-                  }}
-                >
-                  <Text style={styles.retryText}>إعادة المحاولة</Text>
-                </Pressable>
-              </View>
-            ) : null}
-            {!error && filteredFeatured.length === 0 ? (
-              <Text style={styles.empty}>لا توجد منتجات مطابقة.</Text>
-            ) : null}
-          </>
-        }
-        ListFooterComponent={listFooter}
-        renderItem={renderProduct}
-      />
+          ) : (
+            <View style={styles.typesGrid}>
+              {filteredTypes.length === 0 ? (
+                <Text style={styles.empty}>لا توجد أنواع مطابقة.</Text>
+              ) : (
+                filteredTypes.map((t) => (
+                  <View key={t.id} style={[styles.typeGridCell, { width: typeColWidth }]}>
+                    <Pressable
+                      style={styles.typeCard}
+                      onPress={() => {
+                        setSearch("");
+                        setSelectedTypeId(t.id);
+                      }}
+                    >
+                      <ProductTypeIcon icon={t.icon} size={44} />
+                      <Text style={styles.typeCardName} numberOfLines={2}>
+                        {t.name_ar ?? "—"}
+                      </Text>
+                    </Pressable>
+                  </View>
+                ))
+              )}
+            </View>
+          )}
+          {listFooter}
+        </ScrollView>
+      ) : loadingProducts ? (
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={colors.gold} />
+          <Text style={styles.loadingText}>جاري تحميل المنتجات…</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={filteredTypeProducts}
+          keyExtractor={(item) => item.id}
+          numColumns={PRODUCT_COLUMNS}
+          key={PRODUCT_COLUMNS}
+          showsVerticalScrollIndicator={false}
+          columnWrapperStyle={styles.gridRow}
+          contentContainerStyle={styles.gridListContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => {
+                void (async () => {
+                  setRefreshing(true);
+                  try {
+                    if (selectedTypeId) {
+                      await loadProductsForType(selectedTypeId, { silent: true });
+                    }
+                  } finally {
+                    setRefreshing(false);
+                  }
+                })();
+              }}
+              tintColor={colors.gold}
+            />
+          }
+          ListHeaderComponent={
+            <>
+              {productsListHeader}
+              {error ? (
+                <View style={styles.errorBox}>
+                  <Ionicons name="cloud-offline-outline" size={40} color={colors.textMuted} />
+                  <Text style={styles.errorText}>{error}</Text>
+                  <Pressable
+                    style={styles.retry}
+                    onPress={() => selectedTypeId && void loadProductsForType(selectedTypeId)}
+                  >
+                    <Text style={styles.retryText}>إعادة المحاولة</Text>
+                  </Pressable>
+                </View>
+              ) : null}
+              {!error && filteredTypeProducts.length === 0 ? (
+                <Text style={styles.empty}>لا توجد منتجات في هذا النوع.</Text>
+              ) : null}
+            </>
+          }
+          ListFooterComponent={listFooter}
+          renderItem={renderProduct}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -830,7 +961,7 @@ const styles = StyleSheet.create({
   gridCell: {},
   pCard: {
     width: "100%",
-    minHeight: PRODUCT_IMAGE_H + 108,
+    minHeight: PRODUCT_IMAGE_H + 96,
     backgroundColor: colors.surface,
     borderRadius: radii.lg,
     overflow: "hidden",
@@ -988,5 +1119,49 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 16,
     fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
+  },
+  typesScrollContent: { paddingBottom: 120 },
+  typesGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    paddingHorizontal: GRID_H_PAD,
+    gap: GRID_GAP,
+  },
+  typeGridCell: { marginBottom: GRID_GAP },
+  typeCard: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.sm,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 120,
+    ...shadows.soft,
+  },
+  typeCardName: {
+    color: colors.white,
+    fontWeight: "800",
+    fontSize: 13,
+    textAlign: "center",
+    marginTop: 10,
+    lineHeight: 20,
+  },
+  typeBackRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  typeBackTitle: {
+    flex: 1,
+    color: colors.gold,
+    fontWeight: "900",
+    fontSize: 16,
+    textAlign: "right",
   },
 });

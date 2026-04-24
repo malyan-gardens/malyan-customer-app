@@ -16,17 +16,40 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { getProductImageUrls, shuffleArray } from "../lib/catalogUi";
 import { colors, radii, shadows, spacing } from "../lib/theme";
-import type { InventoryRow } from "../lib/types";
+import type { InventoryRow, ProductTypeRow } from "../lib/types";
 import { supabase } from "../lib/supabase";
 import { useCartStore } from "../store/cartStore";
+
+const GRID_GAP = 12;
+const GRID_H_PAD = spacing.md;
+const PRODUCT_COLUMNS = 2;
+
+function ProductTypeIcon({ icon, size }: { icon: string | null; size: number }) {
+  const raw = (icon ?? "").trim();
+  if (/^https?:\/\//i.test(raw)) {
+    return (
+      <Image
+        source={{ uri: raw }}
+        style={{ width: size, height: size }}
+        resizeMode="contain"
+      />
+    );
+  }
+  const ionName = raw.length > 0 && /^[a-z0-9-]+$/i.test(raw) ? raw : "leaf";
+  return <Ionicons name={ionName as never} size={size} color={colors.gold} />;
+}
 
 export default function PlantsScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const addItem = useCartStore((s) => s.addItem);
-  const [items, setItems] = useState<InventoryRow[]>([]);
+  const [productTypes, setProductTypes] = useState<ProductTypeRow[]>([]);
+  const [selectedTypeId, setSelectedTypeId] = useState<string | null>(null);
+  const [typeProducts, setTypeProducts] = useState<InventoryRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingProducts, setLoadingProducts] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [filterOpen, setFilterOpen] = useState(false);
@@ -34,40 +57,79 @@ export default function PlantsScreen() {
   const [priceMin, setPriceMin] = useState("");
   const [priceMax, setPriceMax] = useState("");
 
-  const load = useCallback(async () => {
+  const typeColWidth =
+    (width - GRID_H_PAD * 2 - GRID_GAP * (PRODUCT_COLUMNS - 1)) / PRODUCT_COLUMNS;
+
+  const loadTypes = useCallback(async () => {
     setLoading(true);
     setError(null);
     const { data, error: qErr } = await supabase
-      .from("inventory")
-      .select("*")
+      .from("product_types")
+      .select("id, name_ar, icon")
       .order("name_ar", { ascending: true });
     if (qErr) {
       setError(qErr.message);
-      setItems([]);
+      setProductTypes([]);
     } else {
-      setItems((data as InventoryRow[]) ?? []);
+      setProductTypes((data as ProductTypeRow[]) ?? []);
     }
     setLoading(false);
   }, []);
 
+  const loadProductsForType = useCallback(async (typeId: string) => {
+    setLoadingProducts(true);
+    setError(null);
+    const { data, error: qErr } = await supabase
+      .from("inventory")
+      .select("*")
+      .eq("product_type_id", typeId)
+      .gt("quantity", 0);
+    if (qErr) {
+      setError(qErr.message);
+      setTypeProducts([]);
+    } else {
+      setTypeProducts(shuffleArray((data as InventoryRow[]) ?? []));
+    }
+    setLoadingProducts(false);
+  }, []);
+
   useEffect(() => {
-    load();
-  }, [load]);
+    void loadTypes();
+  }, [loadTypes]);
+
+  useEffect(() => {
+    if (!selectedTypeId) {
+      setTypeProducts([]);
+      return;
+    }
+    void loadProductsForType(selectedTypeId);
+  }, [selectedTypeId, loadProductsForType]);
+
+  const selectedTypeLabel = useMemo(() => {
+    if (!selectedTypeId) return "المنتجات";
+    return productTypes.find((t) => t.id === selectedTypeId)?.name_ar ?? "المنتجات";
+  }, [productTypes, selectedTypeId]);
+
+  const filteredTypes = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return productTypes;
+    return productTypes.filter((t) => (t.name_ar ?? "").toLowerCase().includes(q));
+  }, [productTypes, search]);
 
   const categories = useMemo(() => {
     const s = new Set<string>();
-    items.forEach((r) => {
+    typeProducts.forEach((r) => {
       const c = r.category?.trim();
       if (c) s.add(c);
     });
     return Array.from(s).sort((a, b) => a.localeCompare(b, "ar"));
-  }, [items]);
+  }, [typeProducts]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     const minN = parseFloat(priceMin);
     const maxN = parseFloat(priceMax);
-    return items.filter((row) => {
+    return typeProducts.filter((row) => {
       if (catFilter && row.category !== catFilter) return false;
       const p = row.selling_price ?? 0;
       if (!Number.isNaN(minN) && p < minN) return false;
@@ -77,7 +139,7 @@ export default function PlantsScreen() {
       const desc = (row.description ?? "").toLowerCase();
       return name.includes(q) || desc.includes(q);
     });
-  }, [items, search, catFilter, priceMin, priceMax]);
+  }, [typeProducts, search, catFilter, priceMin, priceMax]);
 
   const clearFilters = () => {
     setCatFilter(null);
@@ -85,7 +147,7 @@ export default function PlantsScreen() {
     setPriceMax("");
   };
 
-  const columns = width >= 768 ? 3 : 2;
+  const columns = PRODUCT_COLUMNS;
 
   if (loading) {
     return (
@@ -100,21 +162,34 @@ export default function PlantsScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: "المنتجات" }} />
+      <Stack.Screen options={{ title: selectedTypeId ? selectedTypeLabel : "المنتجات" }} />
       <SafeAreaView style={styles.screen} edges={["bottom"]}>
         <View style={styles.toolbar}>
-          <Pressable
-            style={styles.filterPill}
-            onPress={() => setFilterOpen(true)}
-          >
-            <Ionicons name="funnel" size={18} color={colors.gold} />
-            <Text style={styles.filterPillText}>تصفية</Text>
-          </Pressable>
+          {selectedTypeId ? (
+            <Pressable
+              style={styles.backPill}
+              onPress={() => {
+                setSelectedTypeId(null);
+                setSearch("");
+                clearFilters();
+              }}
+            >
+              <Ionicons name="chevron-back" size={22} color={colors.gold} />
+            </Pressable>
+          ) : null}
+          {selectedTypeId ? (
+            <Pressable style={styles.filterPill} onPress={() => setFilterOpen(true)}>
+              <Ionicons name="funnel" size={18} color={colors.gold} />
+              <Text style={styles.filterPillText}>تصفية</Text>
+            </Pressable>
+          ) : (
+            <View style={{ width: 44 }} />
+          )}
           <View style={styles.searchBox}>
             <TextInput
               value={search}
               onChangeText={setSearch}
-              placeholder="بحث…"
+              placeholder={selectedTypeId ? "بحث في المنتجات…" : "بحث عن نوع…"}
               placeholderTextColor={colors.textMuted}
               style={styles.searchInput}
             />
@@ -125,9 +200,48 @@ export default function PlantsScreen() {
         {error ? (
           <View style={styles.errorBox}>
             <Text style={styles.errorText}>{error}</Text>
-            <Pressable style={styles.retry} onPress={() => void load()}>
+            <Pressable
+              style={styles.retry}
+              onPress={() => {
+                if (selectedTypeId) void loadProductsForType(selectedTypeId);
+                else void loadTypes();
+              }}
+            >
               <Text style={styles.retryText}>إعادة المحاولة</Text>
             </Pressable>
+          </View>
+        ) : !selectedTypeId ? (
+          <ScrollView
+            contentContainerStyle={styles.scrollPad}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.typesGrid}>
+              {filteredTypes.length === 0 ? (
+                <Text style={styles.empty}>لا توجد أنواع.</Text>
+              ) : (
+                filteredTypes.map((t) => (
+                  <View key={t.id} style={[styles.typeGridCell, { width: typeColWidth }]}>
+                    <Pressable
+                      style={styles.typeCard}
+                      onPress={() => {
+                        setSearch("");
+                        clearFilters();
+                        setSelectedTypeId(t.id);
+                      }}
+                    >
+                      <ProductTypeIcon icon={t.icon} size={44} />
+                      <Text style={styles.typeCardName} numberOfLines={2}>
+                        {t.name_ar ?? "—"}
+                      </Text>
+                    </Pressable>
+                  </View>
+                ))
+              )}
+            </View>
+          </ScrollView>
+        ) : loadingProducts ? (
+          <View style={styles.centered}>
+            <ActivityIndicator size="large" color={colors.gold} />
           </View>
         ) : (
           <ScrollView
@@ -137,48 +251,45 @@ export default function PlantsScreen() {
             {filtered.length === 0 ? (
               <Text style={styles.empty}>لا توجد منتجات.</Text>
             ) : (
-              Array.from(
-                { length: Math.ceil(filtered.length / columns) },
-                (_, row) => (
-                  <View key={row} style={styles.gridRow}>
-                    {filtered.slice(row * columns, row * columns + columns).map((item) => (
-                      <View key={item.id} style={styles.gridCell}>
-                        <PlantCard
-                          item={item}
-                          onOpen={() => router.push(`/product/${item.id}`)}
-                          onOrder={() =>
-                            router.push({
-                              pathname: "/checkout",
-                              params: {
-                                productId: item.id,
-                                productName: item.name_ar ?? "",
-                                productPrice: String(item.selling_price ?? 0),
-                                productCurrency: item.currency ?? "QAR",
-                              },
-                            })
-                          }
-                          onAdd={() =>
-                            addItem({
+              Array.from({ length: Math.ceil(filtered.length / columns) }, (_, row) => (
+                <View key={row} style={styles.gridRow}>
+                  {filtered.slice(row * columns, row * columns + columns).map((item) => (
+                    <View key={item.id} style={styles.gridCell}>
+                      <PlantCard
+                        item={item}
+                        onOpen={() => router.push(`/product/${item.id}`)}
+                        onOrder={() =>
+                          router.push({
+                            pathname: "/checkout",
+                            params: {
                               productId: item.id,
-                              name: item.name_ar ?? "",
-                              nameAr: item.name_ar,
-                              price: item.selling_price ?? 0,
-                              currency: item.currency ?? "QAR",
-                              imageUrl: item.image_url,
-                              quantity: 1,
-                              maxQuantity:
-                                item.quantity != null && item.quantity >= 0
-                                  ? item.quantity
-                                  : undefined,
-                              category: item.category ?? null,
-                            })
-                          }
-                        />
-                      </View>
-                    ))}
-                  </View>
-                )
-              )
+                              productName: item.name_ar ?? "",
+                              productPrice: String(item.selling_price ?? 0),
+                              productCurrency: item.currency ?? "QAR",
+                            },
+                          })
+                        }
+                        onAdd={() =>
+                          addItem({
+                            productId: item.id,
+                            name: item.name_ar ?? "",
+                            nameAr: item.name_ar,
+                            price: item.selling_price ?? 0,
+                            currency: item.currency ?? "QAR",
+                            imageUrl: item.image_url,
+                            quantity: 1,
+                            maxQuantity:
+                              item.quantity != null && item.quantity >= 0
+                                ? item.quantity
+                                : undefined,
+                            category: item.category ?? null,
+                          })
+                        }
+                      />
+                    </View>
+                  ))}
+                </View>
+              ))
             )}
           </ScrollView>
         )}
@@ -290,40 +401,10 @@ function PlantCard({
   const price = (item.selling_price ?? 0).toFixed(2);
   const isOutOfStock = (item.quantity ?? 0) === 0;
   const screenWidth = Dimensions.get("window").width;
-  const columns = width >= 768 ? 3 : 2;
-  const cardWidth = (screenWidth - spacing.md * 2 - 12 * (columns - 1)) / columns;
-  const imageHeight = Math.max(110, Math.floor(cardWidth * 0.72));
-  const images = useMemo(() => {
-    const fallback = item.image_url ? [item.image_url] : [];
-    const raw = (item as InventoryRow & { image_urls?: unknown }).image_urls;
-    if (!raw) return fallback;
-    if (Array.isArray(raw)) {
-      const parsed = (raw as unknown[])
-        .map((v: unknown) => String(v ?? "").trim())
-        .filter((v: string) => /^https?:\/\//.test(v));
-      return parsed.length ? parsed : fallback;
-    }
-    if (typeof raw === "string") {
-      const trimmed = raw.trim();
-      if (!trimmed) return fallback;
-      try {
-        const asJson = JSON.parse(trimmed);
-        if (Array.isArray(asJson)) {
-          const parsed = (asJson as unknown[])
-            .map((v: unknown) => String(v ?? "").trim())
-            .filter((v: string) => /^https?:\/\//.test(v));
-          if (parsed.length) return parsed;
-        }
-      } catch {
-        const parsed = trimmed
-          .split(",")
-          .map((v) => v.trim())
-          .filter((v) => /^https?:\/\//.test(v));
-        if (parsed.length) return parsed;
-      }
-    }
-    return fallback;
-  }, [item]);
+  const cardWidth =
+    (screenWidth - GRID_H_PAD * 2 - GRID_GAP * (PRODUCT_COLUMNS - 1)) / PRODUCT_COLUMNS;
+  const imageHeight = Math.max(100, Math.floor(cardWidth * 0.62));
+  const images = useMemo(() => getProductImageUrls(item), [item]);
   return (
     <View style={styles.card}>
       <Pressable
@@ -406,11 +487,48 @@ const styles = StyleSheet.create({
   toolbar: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: 8,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
+  },
+  backPill: {
+    width: 44,
+    height: 44,
+    borderRadius: radii.md,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  typesGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: GRID_GAP,
+  },
+  typeGridCell: { marginBottom: GRID_GAP },
+  typeCard: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.sm,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 118,
+    ...shadows.card,
+  },
+  typeCardName: {
+    color: colors.white,
+    fontWeight: "800",
+    fontSize: 13,
+    textAlign: "center",
+    marginTop: 10,
+    lineHeight: 20,
   },
   filterPill: {
     flexDirection: "row",
