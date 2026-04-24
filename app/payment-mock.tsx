@@ -129,7 +129,7 @@ export default function PaymentMockScreen() {
         const { data: invoice, error: invErr } = await supabase
           .from("invoices")
           .select("*")
-          .eq("reference_id", orderId)
+          .or(`reference_id.eq.${orderId},order_id.eq.${orderId}`)
           .order("created_at", { ascending: false })
           .limit(1)
           .maybeSingle();
@@ -143,7 +143,7 @@ export default function PaymentMockScreen() {
             console.log("[payment-mock] send-invoice-email failed:", emailErr);
           }
         } else {
-          console.log("[payment-mock] no invoice for reference_id:", orderId);
+          console.log("[payment-mock] no invoice for reference_id/order_id:", orderId);
         }
 
         useCartStore.getState().clear();
