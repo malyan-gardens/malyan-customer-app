@@ -22,22 +22,20 @@ WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen() {
   const router = useRouter();
-  const [providerLoading, setProviderLoading] = useState<null | "google" | "apple">(
-    null
-  );
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const oauthRedirectWeb = "https://malyan-customer-app.vercel.app/auth/callback";
   const oauthRedirectNative = makeRedirectUri({ path: "auth/callback" });
 
-  const oauthLogin = async (provider: "google" | "apple") => {
+  const googleLogin = async () => {
     try {
       setError(null);
-      setProviderLoading(provider);
+      setLoading(true);
       const redirectTo = Platform.OS === "web" ? oauthRedirectWeb : oauthRedirectNative;
 
       if (Platform.OS === "web") {
         const { error: oauthError } = await supabase.auth.signInWithOAuth({
-          provider,
+          provider: "google",
           options: { redirectTo },
         });
         if (oauthError) throw oauthError;
@@ -45,7 +43,7 @@ export default function LoginScreen() {
       }
 
       const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
-        provider,
+        provider: "google",
         options: { redirectTo, skipBrowserRedirect: true },
       });
       if (oauthError) throw oauthError;
@@ -62,7 +60,7 @@ export default function LoginScreen() {
     } catch (e) {
       setError(e instanceof Error ? e.message : "تعذر تسجيل الدخول.");
     } finally {
-      setProviderLoading(null);
+      setLoading(false);
     }
   };
 
@@ -86,39 +84,16 @@ export default function LoginScreen() {
             <View style={styles.card}>
               <Text style={styles.cardTitle}>تسجيل الدخول</Text>
               <Pressable
-                onPress={() => void oauthLogin("google")}
+                onPress={() => void googleLogin()}
                 style={({ pressed }) => [styles.btn, styles.btnGoogle, pressed && styles.pressed]}
-                disabled={providerLoading !== null}
+                disabled={loading}
               >
-                {providerLoading === "google" ? (
+                {loading ? (
                   <ActivityIndicator color="#111" />
                 ) : (
                   <Ionicons name="logo-google" size={22} color="#DB4437" />
                 )}
                 <Text style={styles.btnGoogleText}>تسجيل بجوجل</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => void oauthLogin("apple")}
-                style={({ pressed }) => [styles.btn, styles.btnApple, pressed && styles.pressed]}
-                disabled={providerLoading !== null}
-              >
-                {providerLoading === "apple" ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Ionicons name="logo-apple" size={24} color="#fff" />
-                )}
-                <Text style={styles.btnText}>تسجيل بـ Apple</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => router.push("/phone-input")}
-                style={({ pressed }) => [
-                  styles.btn,
-                  styles.btnPhone,
-                  pressed && styles.pressed,
-                ]}
-              >
-                <Ionicons name="call-outline" size={22} color="#fff" />
-                <Text style={styles.btnText}>تسجيل برقم الهاتف</Text>
               </Pressable>
               {error ? <Text style={styles.errorText}>{error}</Text> : null}
             </View>
@@ -182,14 +157,6 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   btnGoogle: { backgroundColor: "#ffffff" },
-  btnApple: { backgroundColor: "#000000" },
-  btnPhone: { backgroundColor: "#1a7a3c" },
-  btnText: {
-    color: colors.white,
-    fontWeight: "700",
-    fontSize: 16,
-    fontFamily: Platform.select({ web: "Cairo, Tajawal, sans-serif", default: undefined }),
-  },
   btnGoogleText: {
     color: "#111",
     fontWeight: "700",
