@@ -3,7 +3,7 @@ import { Stack } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -67,50 +67,53 @@ export default function MyOrdersScreen() {
   }, [loadOrders]);
 
   const cancelOrder = async (order: OrderRow) => {
-    Alert.alert("تأكيد الإلغاء", "هل تريد إلغاء هذا الطلب؟", [
-      { text: "لا", style: "cancel" },
-      {
-        text: "نعم، إلغاء",
-        style: "destructive",
-        onPress: () => {
-          void (async () => {
-            const isOnline = String(order.payment_method ?? "") === "online";
-            const nextStatus = isOnline ? "refund_requested" : "cancelled";
-            if (isOnline) {
-              const { error: refundErr } = await supabase.from("refund_requests").insert({
-                order_id: order.id,
-              });
-              if (refundErr) {
-                Alert.alert("خطأ", `تعذر إنشاء طلب الاسترجاع: ${refundErr.message}`);
-                return;
-              }
-            }
-            const { error: upErr } = await supabase
-              .from("orders")
-              .update({ status: nextStatus })
-              .eq("id", order.id);
-            if (upErr) {
-              Alert.alert("خطأ", upErr.message);
-              return;
-            }
-            if (isOnline) {
-              await supabase.from("notifications").insert({
-                title: "طلب استرجاع جديد",
-                body: `طلب ${order.id.slice(0, 8)} بانتظار موافقة الإدارة على الاسترجاع`,
-                type: "order",
-                reference_id: order.id,
-                reference_type: "orders",
-                is_read: false,
-              });
-              Alert.alert("تم", "تم إرسال طلب الاسترجاع وسيتم مراجعته من الإدارة.");
-            } else {
-              Alert.alert("تم", "تم إلغاء الطلب بنجاح.");
-            }
-            await loadOrders();
-          })();
-        },
-      },
-    ]);
+    const confirmed =
+      Platform.OS === "web"
+        ? window.confirm("هل تريد إلغاء هذا الطلب؟")
+        : true;
+
+    if (!confirmed) return;
+
+    const isOnline =
+      String(order.payment_method ?? "") === "online" ||
+      String(order.payment_method ?? "") === "electronic";
+    const nextStatus = isOnline ? "refund_requested" : "cancelled";
+
+    if (isOnline) {
+      const { error: refundErr } = await supabase.from("refund_requests").insert({
+        order_id: order.id,
+      });
+      if (refundErr) {
+        if (Platform.OS === "web") window.alert(`تعذر إنشاء طلب الاسترجاع: ${refundErr.message}`);
+        return;
+      }
+    }
+
+    const { error: upErr } = await supabase
+      .from("orders")
+      .update({ status: nextStatus })
+      .eq("id", order.id);
+
+    if (upErr) {
+      if (Platform.OS === "web") window.alert(upErr.message);
+      return;
+    }
+
+    if (isOnline) {
+      await supabase.from("notifications").insert({
+        title: "طلب استرجاع جديد",
+        body: `طلب ${order.id.slice(0, 8)} بانتظار موافقة الإدارة على الاسترجاع`,
+        type: "order",
+        reference_id: order.id,
+        reference_type: "orders",
+        is_read: false,
+      });
+      if (Platform.OS === "web") window.alert("تم إرسال طلب الاسترجاع وسيتم مراجعته من الإدارة.");
+    } else {
+      if (Platform.OS === "web") window.alert("تم إلغاء الطلب بنجاح.");
+    }
+
+    await loadOrders();
   };
 
   return (
@@ -156,7 +159,10 @@ export default function MyOrdersScreen() {
                     ))
                   )}
                   {canCancel ? (
-                    <Pressable style={styles.cancelBtn} onPress={() => void cancelOrder(order)}>
+                    <Pressable
+                      style={styles.cancelBtn}
+                      onPress={() => void cancelOrder(order)}
+                    >
                       <Ionicons name="close-circle-outline" size={18} color={colors.white} />
                       <Text style={styles.cancelText}>إلغاء الطلب</Text>
                     </Pressable>
