@@ -18,6 +18,7 @@ import {
 import { supabase } from "../lib/supabase";
 import { cartTotal, useCartStore } from "../store/cartStore";
 import { useCheckoutDraftStore } from "../store/checkoutDraftStore";
+import { useAuthStore } from "../lib/authStore";
 import { colors, radii, spacing } from "../lib/theme";
 import { QATAR_COUNTRY_CODE } from "../lib/customer";
 
@@ -58,6 +59,7 @@ function buildDeliveryDays(): CalendarDay[] {
 export default function PaymentOptionsScreen() {
   const router = useRouter();
   const clearCart = useCartStore((s) => s.clear);
+  const session = useAuthStore((s) => s.session);
 
   const orderLines = useCheckoutDraftStore((s) => s.orderLines);
   const fromDirectProduct = useCheckoutDraftStore((s) => s.fromDirectProduct);
@@ -77,9 +79,7 @@ export default function PaymentOptionsScreen() {
     () => toIsoDate(addDays(new Date(), 1))
   );
 
-  const ready =
-    orderLines.length > 0 &&
-    Boolean(address?.trim());
+  const ready = orderLines.length > 0 && Boolean(address?.trim());
 
   useEffect(() => {
     if (!ready) router.replace("/checkout");
@@ -99,6 +99,7 @@ export default function PaymentOptionsScreen() {
     customer_phone: effectivePhone.startsWith(QATAR_COUNTRY_CODE)
       ? effectivePhone
       : `${QATAR_COUNTRY_CODE}${effectivePhone.replace(/\D/g, "").slice(-8)}`,
+    customer_email: session?.user?.email ?? null,
     items: serialized,
     total_amount: Math.round(total * 100) / 100,
     delivery_date: selectedDeliveryDate,
@@ -131,7 +132,6 @@ export default function PaymentOptionsScreen() {
     if (insErr) throw insErr;
     const orderId = data?.id as string;
 
-    // Decrement inventory quantity for each ordered item.
     for (const line of orderLines) {
       const { data: inv } = await supabase
         .from("inventory")
@@ -196,7 +196,6 @@ export default function PaymentOptionsScreen() {
       if (insErr) throw insErr;
       const orderId = data?.id as string;
 
-      // Decrement inventory quantity for each ordered item.
       for (const line of orderLines) {
         const { data: inv } = await supabase
           .from("inventory")
