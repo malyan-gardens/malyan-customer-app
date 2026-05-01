@@ -11,19 +11,13 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import {
-  canCancelAsNewOrder,
-  extractQatarPhoneDigits,
-  normalizeQatarPhone,
-  orderStatusLabelAr,
-  QATAR_COUNTRY_CODE,
-} from "../lib/customer";
+import { canCancelAsNewOrder, orderStatusLabelAr } from "../lib/customer";
 import { supabase } from "../lib/supabase";
 import { colors, radii, shadows, spacing } from "../lib/theme";
 
 type OrderRow = {
   id: string;
-  customer_phone: string | null;
+  customer_email: string | null;
   items: Array<{ name?: string; quantity?: number }> | null;
   total_amount: number | null;
   status: string | null;
@@ -31,18 +25,11 @@ type OrderRow = {
   created_at: string;
 };
 
-function buildPhoneVariants(rawPhone: string): string[] {
-  const normalized = normalizeQatarPhone(rawPhone);
-  if (!normalized) return [];
-  const digits = extractQatarPhoneDigits(normalized);
-  return Array.from(new Set([normalized, digits, `${QATAR_COUNTRY_CODE}${digits}`]));
-}
-
 export default function MyOrdersScreen() {
   const [loading, setLoading] = useState(true);
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [phoneVariants, setPhoneVariants] = useState<string[]>([]);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
 
   const loadOrders = useCallback(async () => {
     setLoading(true);
@@ -51,37 +38,18 @@ export default function MyOrdersScreen() {
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      if (!user) {
-        setOrders([]);
-        setLoading(false);
-        return;
-      }
-      let profilePhone = "";
-      try {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("phone")
-          .eq("id", user.id)
-          .maybeSingle();
-        profilePhone = normalizeQatarPhone(
-          String((profile as { phone?: string } | null)?.phone ?? "")
-        );
-      } catch {
-        profilePhone = "";
-      }
-      const authPhone = normalizeQatarPhone(user.phone);
-      const variants = buildPhoneVariants(profilePhone || authPhone);
-      setPhoneVariants(variants);
-      if (variants.length === 0) {
+      if (!user || !user.email) {
         setOrders([]);
         setLoading(false);
         return;
       }
 
+      setUserEmail(user.email);
+
       const { data, error: qErr } = await supabase
         .from("orders")
-        .select("id,customer_phone,items,total_amount,status,payment_method,created_at")
-        .in("customer_phone", variants)
+        .select("id,customer_email,items,total_amount,status,payment_method,created_at")
+        .eq("customer_email", user.email)
         .order("created_at", { ascending: false });
 
       if (qErr) throw qErr;
@@ -154,10 +122,8 @@ export default function MyOrdersScreen() {
             <ActivityIndicator color={colors.gold} />
           ) : error ? (
             <Text style={styles.error}>{error}</Text>
-          ) : phoneVariants.length === 0 ? (
-            <Text style={styles.muted}>
-              لا يوجد رقم هاتف مربوط بالحساب. أضف رقمك بصيغة +974XXXXXXXX.
-            </Text>
+          ) : !userEmail ? (
+            <Text style={styles.muted}>يرجى تسجيل الدخول لعرض طلباتك.</Text>
           ) : orders.length === 0 ? (
             <Text style={styles.muted}>لا توجد طلبات سابقة حتى الآن.</Text>
           ) : (
@@ -189,7 +155,6 @@ export default function MyOrdersScreen() {
                       </Text>
                     ))
                   )}
-
                   {canCancel ? (
                     <Pressable style={styles.cancelBtn} onPress={() => void cancelOrder(order)}>
                       <Ionicons name="close-circle-outline" size={18} color={colors.white} />
