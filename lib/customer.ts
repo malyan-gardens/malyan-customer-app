@@ -41,5 +41,5 @@ export function orderStatusLabelAr(status: string | null | undefined): string {
 
 export function canCancelAsNewOrder(status: string | null | undefined): boolean {
   const value = String(status ?? "").trim().toLowerCase();
-  return value === "new" || value === "pending";
+  return value === "new" || value === "pending" || value === "paid";
 }
