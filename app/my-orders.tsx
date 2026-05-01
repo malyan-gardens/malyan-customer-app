@@ -91,7 +91,12 @@ export default function MyOrdersScreen() {
 
     const { error: upErr } = await supabase
       .from("orders")
-      .update({ status: nextStatus })
+      .update({
+        status: nextStatus,
+        assigned_driver_id: null,
+        assignment_status: null,
+        driver_status: null,
+      })
       .eq("id", order.id);
 
     if (upErr) {
