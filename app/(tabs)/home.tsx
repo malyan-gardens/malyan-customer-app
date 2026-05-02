@@ -128,15 +128,17 @@ export default function HomeScreen() {
   const loadTypesAndPromos = useCallback(async () => {
     setError(null);
     const { data: typesData, error: typesErr } = await supabase
-      .from("product_types")
-      .select("id, name_ar, icon")
-      .order("name_ar", { ascending: true });
-
+  .from("product_types")
+  .select("id, name_ar, icon, inventory(id)")
+  .order("name_ar", { ascending: true });
     if (typesErr) {
       setError(typesErr.message);
       setProductTypes([]);
     } else {
-      setProductTypes((typesData as ProductTypeRow[]) ?? []);
+      const nonEmpty = ((typesData as any[]) ?? []).filter(
+        (t) => Array.isArray(t.inventory) && t.inventory.length > 0
+      );
+      setProductTypes(nonEmpty as ProductTypeRow[]);
     }
 
     const promoList = await getActivePromotions();
