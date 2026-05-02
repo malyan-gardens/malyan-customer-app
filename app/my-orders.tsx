@@ -33,7 +33,6 @@ type OrderRow = {
   created_at: string;
 };
 
-// حالة التوصيل
 function deliveryStatusLabel(status: string | null | undefined): { label: string; color: string } {
   const v = String(status ?? "").trim().toLowerCase();
   if (v === "new" || v === "pending") return { label: "طلب جديد", color: "#c9a84c" };
@@ -45,7 +44,6 @@ function deliveryStatusLabel(status: string | null | undefined): { label: string
   return { label: "طلب جديد", color: "#c9a84c" };
 }
 
-// حالة الدفع
 function paymentStatusLabel(method: string | null | undefined, status: string | null | undefined): { label: string; color: string } {
   const m = String(method ?? "").trim().toLowerCase();
   const s = String(status ?? "").trim().toLowerCase();
@@ -111,33 +109,27 @@ export default function MyOrdersScreen() {
     const isOnline =
       String(order.payment_method ?? "") === "online" ||
       String(order.payment_method ?? "") === "electronic";
-    const nextStatus = isOnline ? "refund_requested" : "cancelled";
 
-    // إنشاء طلب استرجاع للدفع الأونلاين
-    if (isOnline) {
-      const { error: refundErr } = await supabase.from("refund_requests").insert({
-        order_id: order.id,
-      });
-      if (refundErr) {
-        if (Platform.OS === "web") window.alert(`تعذر إنشاء طلب الاسترجاع: ${refundErr.message}`);
-        return;
-      }
-    }
-
-    // تحديث الطلب وفك السائق
+    // كلاهما يصير cancelled فوراً + فك السائق
     const { error: upErr } = await supabase
       .from("orders")
       .update({
-        status: nextStatus,
+        status: "cancelled",
         assigned_driver_id: null,
         assignment_status: null,
         driver_status: null,
+        driver_token: null,
       })
       .eq("id", order.id);
 
     if (upErr) {
       if (Platform.OS === "web") window.alert(upErr.message);
       return;
+    }
+
+    // للأونلاين نضيف refund request
+    if (isOnline) {
+      await supabase.from("refund_requests").insert({ order_id: order.id });
     }
 
     // إرجاع المخزون
@@ -150,18 +142,17 @@ export default function MyOrdersScreen() {
         .eq("id", item.productId)
         .single();
       if (inv) {
-        const restoredQty = Number(inv.quantity ?? 0) + Number(item.quantity ?? 1);
         await supabase
           .from("inventory")
-          .update({ quantity: restoredQty })
+          .update({ quantity: Number(inv.quantity ?? 0) + Number(item.quantity ?? 1) })
           .eq("id", item.productId);
       }
     }
 
     // إشعار للإدارة
     await supabase.from("notifications").insert({
-      title: isOnline ? "طلب استرجاع جديد" : "طلب ملغي",
-      body: `طلب ${order.id.slice(0, 8)} — ${isOnline ? "بانتظار موافقة الإدارة على الاسترجاع" : "تم الإلغاء من العميل"}`,
+      title: isOnline ? "طلب إلغاء + استرجاع" : "طلب ملغي",
+      body: `طلب ${order.id.slice(0, 8)} — ${isOnline ? "ألغاه العميل ويحتاج استرجاع مبلغ" : "تم الإلغاء من العميل"}`,
       type: "order",
       reference_id: order.id,
       reference_type: "orders",
@@ -169,10 +160,7 @@ export default function MyOrdersScreen() {
     });
 
     if (Platform.OS === "web") {
-      window.alert(isOnline
-        ? "تم إرسال طلب الاسترجاع وسيتم مراجعته من الإدارة."
-        : "تم إلغاء الطلب بنجاح."
-      );
+      window.alert("تم إلغاء الطلب بنجاح.");
     }
 
     await loadOrders();
@@ -200,7 +188,6 @@ export default function MyOrdersScreen() {
 
               return (
                 <View key={order.id} style={styles.card}>
-                  {/* رأس الكارد */}
                   <View style={styles.cardHeader}>
                     <Text style={styles.orderId}>#{order.id.slice(0, 8)}</Text>
                     <Text style={styles.orderDate}>
@@ -212,7 +199,6 @@ export default function MyOrdersScreen() {
                     </Text>
                   </View>
 
-                  {/* حالة التوصيل */}
                   <View style={styles.statusRow}>
                     <Text style={styles.statusLabel}>التوصيل:</Text>
                     <View style={[styles.badge, { backgroundColor: delivery.color + "22", borderColor: delivery.color }]}>
@@ -220,7 +206,6 @@ export default function MyOrdersScreen() {
                     </View>
                   </View>
 
-                  {/* حالة الدفع */}
                   <View style={styles.statusRow}>
                     <Text style={styles.statusLabel}>الدفع:</Text>
                     <View style={[styles.badge, { backgroundColor: payment.color + "22", borderColor: payment.color }]}>
@@ -228,7 +213,6 @@ export default function MyOrdersScreen() {
                     </View>
                   </View>
 
-                  {/* موعد التوصيل */}
                   {order.delivery_date ? (
                     <Text style={styles.deliveryDate}>
                       📅 موعد التوصيل: {new Date(`${order.delivery_date}T00:00:00`).toLocaleDateString("ar-QA", {
@@ -237,7 +221,6 @@ export default function MyOrdersScreen() {
                     </Text>
                   ) : null}
 
-                  {/* المنتجات */}
                   <View style={styles.itemsWrap}>
                     {items.length === 0 ? (
                       <Text style={styles.item}>— بدون عناصر</Text>
@@ -250,12 +233,10 @@ export default function MyOrdersScreen() {
                     )}
                   </View>
 
-                  {/* الإجمالي */}
                   <Text style={styles.total}>
                     الإجمالي: {Number(order.total_amount ?? 0).toFixed(2)} QAR
                   </Text>
 
-                  {/* زر الإلغاء */}
                   {canCancel ? (
                     <Pressable
                       style={styles.cancelBtn}
